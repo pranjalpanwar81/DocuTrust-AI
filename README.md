@@ -456,4 +456,4 @@ Compare the current lexical baseline with an embedding retriever and reranker us
 
 ## License
 
-No license has been specified for this repository. Add a license file before distributing or reusing the code outside the project team.
+This project is licensed under the [MIT License](LICENSE).
