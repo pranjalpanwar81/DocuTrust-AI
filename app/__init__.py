@@ -1,0 +1,2 @@
+"""DocuTrust AI application package."""
+

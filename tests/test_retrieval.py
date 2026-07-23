@@ -1,0 +1,43 @@
+from app.models import ExtractedPage
+from app.retrieval import bill_fields, chunk_pages, concise_answer, confidence, focused_excerpt, retrieve
+
+
+def test_retrieval_returns_relevant_policy_evidence():
+    chunks = chunk_pages("doc-1", [ExtractedPage(2, "Leave requests must be approved by the reporting manager within five working days.")])
+    rows = [{**chunk, "filename": "leave-policy.pdf"} for chunk in chunks]
+    results = retrieve("Who approves leave requests?", rows)
+    assert results
+    assert results[0].page == 2
+    assert confidence(results) > 0
+
+
+def test_retrieval_abstains_without_overlap():
+    chunks = chunk_pages("doc-1", [ExtractedPage(1, "The office opens at nine in the morning.")])
+    rows = [{**chunk, "filename": "office.pdf"} for chunk in chunks]
+    assert retrieve("What is the encryption standard?", rows) == []
+
+
+def test_evidence_score_is_numeric_not_document_text():
+    chunks = chunk_pages("doc-1", [ExtractedPage(1, "Tax is valid from 6 July 2026 to 5 July 2028.")])
+    rows = [{**chunk, "filename": "tax-receipt.pdf"} for chunk in chunks]
+    result = retrieve("Till which date is the tax valid?", rows)[0]
+    assert isinstance(result.score, float)
+    assert "Tax is valid" in result.text
+
+
+def test_date_question_gets_a_concise_grounded_answer():
+    chunks = chunk_pages("doc-1", [ExtractedPage(1, "MV Tax 06-Jul-2026 to 05-Jul-2028. Amount paid: Rs 920.")])
+    rows = [{**chunk, "filename": "tax-receipt.pdf"} for chunk in chunks]
+    evidence = retrieve("Till which date is the tax valid?", rows)
+    assert concise_answer("Till which date is the tax valid?", evidence).startswith("The tax is valid until 05-Jul-2028")
+    assert focused_excerpt("Till which date is the tax valid?", evidence[0].text) == "Tax period: 06-Jul-2026 to 05-Jul-2028."
+
+
+def test_flattened_bill_is_returned_as_aligned_fields():
+    text = "Invoice Number 2023001322993 Billing Period 01/10/2023-31/10/2023 Invoice Date 04/11/2023 Payment Due Date 18/11/2023 Total Amount €30,00"
+    chunks = chunk_pages("doc-1", [ExtractedPage(1, text)])
+    rows = [{**chunk, "filename": "utility_bill.png"} for chunk in chunks]
+    answer = concise_answer("What is the total amount bill?", retrieve("What is the total amount bill?", rows))
+    assert bill_fields(text)[-1] == ("Total amount", "€30,00")
+    assert "Total amount: €30,00" in answer
+    assert "Payment due date: 18/11/2023" in answer

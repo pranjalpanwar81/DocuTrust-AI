@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DocuTrust AI</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <a class="brand" href="/">
+          <span class="brand-mark">D</span>
+          <span>DocuTrust <b>AI</b></span>
+        </a>
+        <p class="eyebrow">WORKSPACE</p>
+        <button class="nav-item active" type="button"><span>⌕</span> Ask documents</button>
+        <button class="nav-item" type="button" id="documentsNav"><span>▣</span> Source documents <em id="documentCount">0</em></button>
+        <button class="nav-item" type="button" id="analyticsNav"><span>◫</span> Analytics</button>
+        <div class="sidebar-bottom">
+          <div class="trust-note"><span>✓</span><div><b>Grounded answers</b><small>Every response includes source evidence.</small></div></div>
+          <a href="/docs" target="_blank">Developer API ↗</a>
+        </div>
+      </aside>
+
+      <main>
+        <header>
+          <div><p class="eyebrow">POLICY INTELLIGENCE</p><h1>Ask with confidence.</h1></div>
+          <div class="header-actions"><div class="status"><i></i> Secure workspace</div><button id="themeToggle" class="theme-toggle" type="button" aria-label="Switch to dark theme" title="Switch theme"><span id="themeIcon">☾</span></button></div>
+        </header>
+
+        <section class="welcome" id="welcome">
+          <span class="spark">✦</span>
+          <h2>Your documents, made trustworthy.</h2>
+          <p>Upload policies, SOPs, and compliance documents. Ask a question and verify every answer using its cited source.</p>
+        </section>
+
+        <section class="upload-card">
+          <div>
+            <p class="eyebrow">STEP 1</p><h3>Add source documents</h3>
+            <p class="muted">PDF, DOCX, TXT, Markdown, and image files are supported.</p>
+          </div>
+          <label class="upload-button" for="fileInput"><span>↑</span> Upload document</label>
+          <input id="fileInput" type="file" accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg,.tiff,.bmp" hidden />
+        </section>
+        <p class="upload-status" id="uploadStatus" aria-live="polite"></p>
+
+        <section class="documents" id="documentsSection">
+          <div class="section-heading"><div><p class="eyebrow">INDEXED KNOWLEDGE</p><h3>Source documents</h3></div><div class="document-actions"><button class="danger-button" type="button" id="clearAllButton">Clear all</button><button class="text-button" type="button" id="refreshButton">Refresh</button></div></div>
+          <div id="documentList" class="document-list"><p class="empty">No documents uploaded yet. Add a source document to begin.</p></div>
+        </section>
+
+        <section class="analytics-card" id="analyticsSection">
+          <div class="section-heading"><div><p class="eyebrow">AUDIT & QUALITY</p><h3>Workspace analytics</h3></div><button class="text-button" type="button" id="analyticsRefresh">Refresh</button></div>
+          <div class="metric-grid">
+            <div class="metric"><span id="metricDocuments">0</span><small>Documents</small></div>
+            <div class="metric"><span id="metricChunks">0</span><small>Evidence chunks</small></div>
+            <div class="metric"><span id="metricGrounded">0%</span><small>Grounded-answer rate</small></div>
+            <div class="metric"><span id="metricConfidence">0%</span><small>Average confidence</small></div>
+          </div>
+        </section>
+
+        <section class="ask-card">
+          <p class="eyebrow">STEP 2</p><h3>Ask a question</h3>
+          <form id="queryForm">
+            <label class="scope-label" for="sourceScope">Search scope</label>
+            <select id="sourceScope"><option value="all">All indexed documents</option></select>
+            <textarea id="question" required minlength="5" placeholder="e.g. What is the approval process for leave requests?"></textarea>
+            <div class="ask-footer"><span>Answers are limited to your uploaded evidence.</span><button type="submit" id="askButton">Ask DocuTrust <span>→</span></button></div>
+          </form>
+        </section>
+
+        <section id="answerSection" class="answer-card hidden" aria-live="polite">
+          <div class="answer-header"><div><p class="eyebrow">ANSWER</p><h3 id="answerTitle">Evidence-backed response</h3></div><span id="confidenceBadge" class="confidence"></span></div>
+          <p id="answerText" class="answer-text"></p>
+          <div class="citation-area"><p class="eyebrow">SUPPORTING EVIDENCE</p><div id="citations"></div></div>
+        </section>
+
+        <section class="history-card" id="historySection">
+          <div class="section-heading"><div><p class="eyebrow">AUDIT TRAIL</p><h3>Recent questions</h3></div><button class="text-button" type="button" id="historyRefresh">Refresh</button></div>
+          <div id="historyList" class="history-list"><p class="empty">Your recent questions will appear here.</p></div>
+        </section>
+      </main>
+    </div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
