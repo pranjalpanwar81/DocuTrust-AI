@@ -114,7 +114,7 @@ function setupVoiceInput() {
 voiceButton.addEventListener('click', () => {
   if (!recognition) return;
   recognition.lang = document.querySelector('#voiceLanguage').value;
-  recognition.start();
+  try { recognition.start(); } catch (error) { voiceStatus.textContent = 'Voice input is already listening. Please finish your question.'; }
 });
 
 readAnswerButton.addEventListener('click', () => {
@@ -139,10 +139,10 @@ function setTheme(theme) {
   document.querySelector('#themeIcon').textContent = isDark ? '☀' : '☾';
   themeToggle.setAttribute('aria-label', `Switch to ${isDark ? 'light' : 'dark'} theme`);
   themeToggle.title = themeToggle.getAttribute('aria-label');
-  localStorage.setItem('docutrust-theme', theme);
+  localStorage.setItem('docutrust-theme-v2', theme);
 }
 themeToggle.addEventListener('click', () => setTheme(document.body.dataset.theme === 'dark' ? 'light' : 'dark'));
-setTheme(localStorage.getItem('docutrust-theme') || 'light');
+setTheme(localStorage.getItem('docutrust-theme-v2') || 'dark');
 list.addEventListener('click', async event => {
   const button = event.target.closest('.delete-button');
   if (!button || !confirm(`Delete “${button.dataset.documentName}”? This cannot be undone.`)) return;
@@ -203,3 +203,13 @@ async function deleteHistoryEvent(eventId) {
 }
 Promise.all([loadDocuments(), loadAnalytics(), loadHistory()]);
 setupVoiceInput();
+
+document.querySelector('#heroUpload').addEventListener('click', () => document.querySelector('#fileInput').click());
+document.querySelectorAll('[data-scroll-target]').forEach(button => {
+  button.addEventListener('click', () => document.querySelector(`#${button.dataset.scrollTarget}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+});
+
+const revealObserver = new IntersectionObserver(entries => {
+  entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add('is-visible'); revealObserver.unobserve(entry.target); } });
+}, { threshold: 0.12 });
+document.querySelectorAll('.reveal').forEach(section => revealObserver.observe(section));

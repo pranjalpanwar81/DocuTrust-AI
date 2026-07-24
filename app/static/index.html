@@ -3,85 +3,70 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DocuTrust AI</title>
+    <meta name="theme-color" content="#070b0b" />
+    <title>DocuTrust AI — Evidence workspace</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
-  <body>
+  <body data-theme="dark">
+    <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
     <div class="shell">
-      <aside class="sidebar">
-        <a class="brand" href="/">
-          <span class="brand-mark">D</span>
-          <span>DocuTrust <b>AI</b></span>
-        </a>
-        <p class="eyebrow">WORKSPACE</p>
-        <button class="nav-item active" type="button"><span>⌕</span> Ask documents</button>
-        <button class="nav-item" type="button" id="documentsNav"><span>▣</span> Source documents <em id="documentCount">0</em></button>
-        <button class="nav-item" type="button" id="analyticsNav"><span>◫</span> Analytics</button>
-        <div class="sidebar-bottom">
-          <div class="trust-note"><span>✓</span><div><b>Grounded answers</b><small>Every response includes source evidence.</small></div></div>
-          <a href="/docs" target="_blank">Developer API ↗</a>
-        </div>
-      </aside>
+      <header class="site-nav">
+        <a class="brand" href="/" aria-label="DocuTrust AI home"><span class="brand-mark"><i></i><i></i><i></i></span><span>docu<span>trust</span><b>.ai</b></span></a>
+        <nav aria-label="Workspace navigation">
+          <button class="nav-item active" type="button" data-scroll-target="ask"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.3-4.3m2.3-5.2a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z"/></svg> Ask</button>
+          <button class="nav-item" type="button" id="documentsNav"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6V3Zm8 0v5h5M9 12h6m-6 4h6"/></svg> Documents <em id="documentCount">0</em></button>
+          <button class="nav-item" type="button" id="analyticsNav"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9m5 10V5m5 14v-7m5 7V3"/></svg> Analytics</button>
+        </nav>
+        <div class="nav-right"><div class="workspace-pill"><span></span> Private workspace</div><a class="api-link" href="/docs" target="_blank" rel="noreferrer">API ↗</a></div>
+      </header>
 
       <main>
-        <header>
-          <div><p class="eyebrow">POLICY INTELLIGENCE</p><h1>Ask with confidence.</h1></div>
-          <div class="header-actions"><div class="status"><i></i> Secure workspace</div><button id="themeToggle" class="theme-toggle" type="button" aria-label="Switch to dark theme" title="Switch theme"><span id="themeIcon">☾</span></button></div>
+        <header class="topbar">
+          <div class="breadcrumb"><span class="live-dot"></span> Intelligence console <i>/</i> <b>Evidence workspace</b></div>
+          <div class="header-actions"><div class="status"><i></i> System ready</div><button id="themeToggle" class="theme-toggle" type="button" aria-label="Switch to light theme" title="Switch theme"><span id="themeIcon">☼</span></button></div>
         </header>
 
-        <section class="welcome" id="welcome">
-          <span class="spark">✦</span>
-          <h2>Your documents, made trustworthy.</h2>
-          <p>Upload policies, SOPs, and compliance documents. Ask a question and verify every answer using its cited source.</p>
+        <section class="hero reveal" id="hero">
+          <div class="hero-copy"><p class="eyebrow">Reliable answers, traceable evidence</p><h1>Know exactly<br />where the answer <em>comes from.</em></h1><p>DocuTrust searches your private documents, corrects small query mistakes, and returns answers with page-level evidence.</p><div class="hero-actions"><button class="primary-link" type="button" data-scroll-target="ask">Ask your documents <span>↗</span></button><button class="quiet-link" type="button" id="heroUpload">+ Add a source</button></div></div>
+          <div class="signal-scene" aria-hidden="true"><div class="scene-grid"></div><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="evidence-orb"><span>✓</span><small>verified</small></div><div class="data-card card-a"><i></i><b>Evidence found</b><span>PAGE 04 · POLICY</span></div><div class="data-card card-b"><i></i><b>Typo corrected</b><span>“leav” → “leave”</span></div><div class="docu-buddy"><div class="buddy-antenna"></div><div class="buddy-head"><span class="buddy-eye left"></span><span class="buddy-eye right"></span><i></i></div><div class="buddy-body"><b>DOCU</b><span>✦</span></div><div class="buddy-arm buddy-arm-left"></div><div class="buddy-arm buddy-arm-right"></div><div class="buddy-shadow"></div></div></div>
         </section>
 
-        <section class="upload-card">
-          <div>
-            <p class="eyebrow">STEP 1</p><h3>Add source documents</h3>
-            <p class="muted">PDF, DOCX, TXT, Markdown, and image files are supported.</p>
-          </div>
-          <label class="upload-button" for="fileInput"><span>↑</span> Upload document</label>
+        <section class="upload-card reveal" id="uploadSection">
+          <div class="upload-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m0 0 5 5m-5-5L7 8M5 14v5h14v-5"/></svg></div>
+          <div class="upload-copy"><p class="eyebrow">01 — Build your evidence base</p><h3>Add source documents</h3><p>PDF, DOCX, TXT, Markdown, and image files are supported.</p></div>
+          <label class="upload-button" for="fileInput">Choose file <span>+</span></label>
           <input id="fileInput" type="file" accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg,.tiff,.bmp" hidden />
         </section>
         <p class="upload-status" id="uploadStatus" aria-live="polite"></p>
 
-        <section class="documents" id="documentsSection">
-          <div class="section-heading"><div><p class="eyebrow">INDEXED KNOWLEDGE</p><h3>Source documents</h3></div><div class="document-actions"><button class="danger-button" type="button" id="clearAllButton">Clear all</button><button class="text-button" type="button" id="refreshButton">Refresh</button></div></div>
+        <section class="documents panel reveal" id="documentsSection">
+          <div class="section-heading"><div><p class="eyebrow">Indexed knowledge</p><h3>Source documents</h3></div><div class="document-actions"><button class="danger-button" type="button" id="clearAllButton">Clear all</button><button class="text-button" type="button" id="refreshButton">Refresh ↻</button></div></div>
           <div id="documentList" class="document-list"><p class="empty">No documents uploaded yet. Add a source document to begin.</p></div>
         </section>
 
-        <section class="analytics-card" id="analyticsSection">
-          <div class="section-heading"><div><p class="eyebrow">AUDIT & QUALITY</p><h3>Workspace analytics</h3></div><button class="text-button" type="button" id="analyticsRefresh">Refresh</button></div>
-          <div class="metric-grid">
-            <div class="metric"><span id="metricDocuments">0</span><small>Documents</small></div>
-            <div class="metric"><span id="metricChunks">0</span><small>Evidence chunks</small></div>
-            <div class="metric"><span id="metricGrounded">0%</span><small>Grounded-answer rate</small></div>
-            <div class="metric"><span id="metricConfidence">0%</span><small>Average confidence</small></div>
-          </div>
+        <section class="analytics-card panel reveal" id="analyticsSection">
+          <div class="section-heading"><div><p class="eyebrow">Audit & quality</p><h3>Workspace pulse</h3></div><button class="text-button" type="button" id="analyticsRefresh">Refresh ↻</button></div>
+          <div class="metric-grid"><div class="metric"><span id="metricDocuments">0</span><small>Documents indexed</small></div><div class="metric"><span id="metricChunks">0</span><small>Evidence chunks</small></div><div class="metric metric-highlight"><span id="metricGrounded">0%</span><small>Grounded-answer rate</small></div><div class="metric"><span id="metricConfidence">0%</span><small>Average confidence</small></div></div>
         </section>
 
-        <section class="ask-card">
-          <p class="eyebrow">STEP 2</p><h3>Ask a question</h3>
+        <section class="ask-card panel reveal" id="ask">
+          <div class="ask-intro"><div><p class="eyebrow">02 — Ask with context</p><h3>What do you need to know?</h3></div><span class="safe-chip"><i></i> Source-bound answers</span></div>
           <form id="queryForm">
-            <label class="scope-label" for="sourceScope">Search scope</label>
-            <select id="sourceScope"><option value="all">All indexed documents</option></select>
-            <div class="voice-toolbar"><label class="scope-label" for="voiceLanguage">Voice language</label><select id="voiceLanguage"><option value="en-IN">Hinglish / English (India)</option><option value="en-US">English</option></select><button id="voiceButton" type="button" class="voice-button" aria-label="Speak your question" title="Speak your question"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21H8v2h8v-2h-3v-3.08A7 7 0 0 0 19 11h-2Z"/></svg><span id="voiceButtonText">Speak question</span></button></div>
-            <textarea id="question" required minlength="5" placeholder="Type or speak your question. Example: What is the approval process for leave requests?"></textarea>
-            <p class="voice-status" id="voiceStatus" aria-live="polite">You can ask in Hinglish or English.</p>
-            <div class="ask-footer"><span>Answers are limited to your uploaded evidence.</span><div class="answer-actions"><button id="readAnswerButton" type="button" class="read-button" disabled>Listen to answer</button><button type="submit" id="askButton">Ask DocuTrust <span>→</span></button></div></div>
+            <div class="form-meta"><label class="scope-label" for="sourceScope">Search scope</label><select id="sourceScope"><option value="all">All indexed documents</option></select></div>
+            <div class="question-surface"><textarea id="question" required minlength="5" placeholder="Type your question, or use voice input…"></textarea><div class="question-tools"><select id="voiceLanguage" aria-label="Voice language"><option value="en-IN">Hinglish / English (India)</option><option value="en-US">English</option></select><button id="voiceButton" type="button" class="voice-button" aria-label="Speak your question" title="Speak your question"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21H8v2h8v-2h-3v-3.08A7 7 0 0 0 19 11h-2Z"/></svg><span id="voiceButtonText">Speak</span></button></div></div>
+            <div class="ask-footer"><div><p class="voice-status" id="voiceStatus" aria-live="polite">Hinglish and English voice input are supported.</p><span>Answers are limited to uploaded evidence.</span></div><div class="answer-actions"><button id="readAnswerButton" type="button" class="read-button" disabled>Listen <span>◖</span></button><button type="submit" id="askButton">Find evidence <span>→</span></button></div></div>
           </form>
         </section>
 
-        <section id="answerSection" class="answer-card hidden" aria-live="polite">
-          <div class="answer-header"><div><p class="eyebrow">ANSWER</p><h3 id="answerTitle">Evidence-backed response</h3></div><span id="confidenceBadge" class="confidence"></span></div>
-          <p id="answerText" class="answer-text"></p>
-          <div class="citation-area"><p class="eyebrow">SUPPORTING EVIDENCE</p><div id="citations"></div></div>
-        </section>
+        <section id="answerSection" class="answer-card panel hidden" aria-live="polite"><div class="answer-header"><div><p class="eyebrow">Answer</p><h3 id="answerTitle">Evidence-backed response</h3></div><span id="confidenceBadge" class="confidence"></span></div><p id="answerText" class="answer-text"></p><div class="citation-area"><p class="eyebrow">Supporting evidence</p><div id="citations"></div></div></section>
 
-        <section class="history-card" id="historySection">
-          <div class="section-heading"><div><p class="eyebrow">AUDIT TRAIL</p><h3>Recent questions</h3></div><button class="text-button" type="button" id="historyRefresh">Refresh</button></div>
-          <div id="historyList" class="history-list"><p class="empty">Your recent questions will appear here.</p></div>
-        </section>
+        <section class="history-card panel reveal" id="historySection"><div class="section-heading"><div><p class="eyebrow">Audit trail</p><h3>Recent questions</h3></div><button class="text-button" type="button" id="historyRefresh">Refresh ↻</button></div><div id="historyList" class="history-list"><p class="empty">Your recent questions will appear here.</p></div></section>
+
+        <section class="roadmap reveal" id="roadmap"><div class="roadmap-title"><p class="eyebrow">What’s next</p><h2>Built to grow beyond the demo.</h2><p>These are the next practical upgrades for a production-ready compliance intelligence platform.</p></div><div class="roadmap-grid"><article><span>01</span><h3>Visual citations</h3><p>Open the exact PDF page and highlight the sentence used in an answer.</p></article><article><span>02</span><h3>Hybrid search</h3><p>Add embeddings and reranking for stronger semantic retrieval across large document sets.</p></article><article><span>03</span><h3>Team controls</h3><p>Role-based access, document ownership, and protected audit exports for organizations.</p></article></div></section>
+        <footer><span>DocuTrust AI · Citation-grounded intelligence</span><span>Built for accountable decisions</span></footer>
       </main>
     </div>
     <script src="/static/app.js"></script>
