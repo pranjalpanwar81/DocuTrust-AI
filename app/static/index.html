@@ -65,8 +65,10 @@
           <form id="queryForm">
             <label class="scope-label" for="sourceScope">Search scope</label>
             <select id="sourceScope"><option value="all">All indexed documents</option></select>
-            <textarea id="question" required minlength="5" placeholder="e.g. What is the approval process for leave requests?"></textarea>
-            <div class="ask-footer"><span>Answers are limited to your uploaded evidence.</span><button type="submit" id="askButton">Ask DocuTrust <span>→</span></button></div>
+            <div class="voice-toolbar"><label class="scope-label" for="voiceLanguage">Voice language</label><select id="voiceLanguage"><option value="en-IN">Hinglish / English (India)</option><option value="en-US">English</option></select><button id="voiceButton" type="button" class="voice-button" aria-label="Speak your question" title="Speak your question"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21H8v2h8v-2h-3v-3.08A7 7 0 0 0 19 11h-2Z"/></svg><span id="voiceButtonText">Speak question</span></button></div>
+            <textarea id="question" required minlength="5" placeholder="Type or speak your question. Example: What is the approval process for leave requests?"></textarea>
+            <p class="voice-status" id="voiceStatus" aria-live="polite">You can ask in Hinglish or English.</p>
+            <div class="ask-footer"><span>Answers are limited to your uploaded evidence.</span><div class="answer-actions"><button id="readAnswerButton" type="button" class="read-button" disabled>Listen to answer</button><button type="submit" id="askButton">Ask DocuTrust <span>→</span></button></div></div>
           </form>
         </section>
 

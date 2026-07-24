@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from .config import settings
 from .database import Database
 from .extraction import ExtractionError, extract_pages, sanitize_filename
-from .retrieval import chunk_pages, concise_answer, confidence, focused_excerpt, retrieve
+from .retrieval import chunk_pages, concise_answer, confidence, corrected_question, focused_excerpt, retrieve
 from .synthesis import synthesize
 
 database = Database(settings.data_dir / "docutrust.db")
@@ -88,14 +88,15 @@ def ask(request: QueryRequest):
     rows = database.all_chunks()
     if request.document_ids:
         rows = [row for row in rows if row["document_id"] in request.document_ids]
-    evidence = retrieve(request.question, rows)
+    interpreted_question, corrections = corrected_question(request.question, rows)
+    evidence = retrieve(interpreted_question, rows)
     score = confidence(evidence)
     status = "grounded" if score >= settings.retrieval_threshold and evidence else "insufficient_evidence"
-    generated = synthesize(request.question, evidence) if status == "grounded" else None
-    answer = generated or (concise_answer(request.question, evidence) if status == "grounded" else "I do not have enough supporting evidence in the indexed documents to answer this reliably.")
+    generated = synthesize(interpreted_question, evidence) if status == "grounded" else None
+    answer = generated or (concise_answer(interpreted_question, evidence) if status == "grounded" else "I do not have enough supporting evidence in the indexed documents to answer this reliably.")
     event = {"id": str(uuid4()), "created_at": datetime.now(timezone.utc).isoformat(), "question": request.question, "answer_status": status, "confidence": score, "citation_ids": [item.chunk_id for item in evidence]}
     database.add_query_event(event)
-    return {"answer": answer, "answer_status": status, "confidence": score, "citations": [{"chunk_id": item.chunk_id, "document_id": item.document_id, "document_name": item.document_name, "page": item.page, "section": item.section, "relevance_score": round(item.score, 4), "supporting_quote": focused_excerpt(request.question, item.text)} for item in evidence], "audit_event_id": event["id"]}
+    return {"answer": answer, "answer_status": status, "confidence": score, "interpreted_question": interpreted_question, "corrections": corrections, "citations": [{"chunk_id": item.chunk_id, "document_id": item.document_id, "document_name": item.document_name, "page": item.page, "section": item.section, "relevance_score": round(item.score, 4), "supporting_quote": focused_excerpt(interpreted_question, item.text)} for item in evidence], "audit_event_id": event["id"]}
 
 
 @app.get("/", include_in_schema=False)

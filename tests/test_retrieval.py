@@ -1,5 +1,5 @@
 from app.models import ExtractedPage
-from app.retrieval import bill_fields, chunk_pages, concise_answer, confidence, focused_excerpt, retrieve
+from app.retrieval import bill_fields, chunk_pages, concise_answer, confidence, corrected_question, focused_excerpt, retrieve
 
 
 def test_retrieval_returns_relevant_policy_evidence():
@@ -41,3 +41,12 @@ def test_flattened_bill_is_returned_as_aligned_fields():
     assert bill_fields(text)[-1] == ("Total amount", "€30,00")
     assert "Total amount: €30,00" in answer
     assert "Payment due date: 18/11/2023" in answer
+
+
+def test_misspelled_document_keyword_is_corrected_before_retrieval():
+    chunks = chunk_pages("doc-1", [ExtractedPage(1, "The total amount payable is Rs. 920.00.")])
+    rows = [{**chunk, "filename": "invoice.txt"} for chunk in chunks]
+    interpreted, corrections = corrected_question("What is the amunt payable?", rows)
+    assert interpreted == "What is the amount payable?"
+    assert corrections == [{"original": "amunt", "corrected": "amount"}]
+    assert retrieve("What is the amunt payable?", rows)

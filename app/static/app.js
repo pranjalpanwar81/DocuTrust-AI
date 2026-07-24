@@ -3,6 +3,10 @@ const count = document.querySelector('#documentCount');
 const uploadStatus = document.querySelector('#uploadStatus');
 const answerSection = document.querySelector('#answerSection');
 const sourceScope = document.querySelector('#sourceScope');
+const voiceButton = document.querySelector('#voiceButton');
+const voiceStatus = document.querySelector('#voiceStatus');
+const readAnswerButton = document.querySelector('#readAnswerButton');
+let recognition;
 
 async function loadDocuments() {
   const response = await fetch('/api/v1/documents');
@@ -63,6 +67,11 @@ function renderAnswer(result) {
   answerSection.classList.remove('hidden');
   document.querySelector('#answerTitle').textContent = result.answer_status === 'grounded' ? 'Evidence-backed response' : 'More evidence needed';
   document.querySelector('#answerText').textContent = result.answer;
+  if (result.corrections?.length) {
+    const correctionText = result.corrections.map(item => `“${item.original}” to “${item.corrected}”`).join(', ');
+    voiceStatus.textContent = `Spelling corrected automatically: ${correctionText}.`;
+  }
+  readAnswerButton.disabled = !result.answer;
   const badge = document.querySelector('#confidenceBadge');
   badge.textContent = `${Math.round(result.confidence * 100)}% confidence`;
   badge.className = `confidence ${result.answer_status === 'grounded' ? 'good' : 'low'}`;
@@ -70,6 +79,52 @@ function renderAnswer(result) {
     <article class="citation"><span>[${index + 1}]</span><div><b>${escapeHtml(citation.document_name)} · Page ${citation.page}</b><p>“${escapeHtml(citation.supporting_quote)}”</p></div></article>`).join('') : '<p class="empty">No source citation was found. Upload a relevant document or ask a more specific question.</p>';
   answerSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+function setupVoiceInput() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    voiceButton.disabled = true;
+    voiceStatus.textContent = 'Voice input is not available in this browser. Try Chrome or Edge.';
+    return;
+  }
+  recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+  recognition.onstart = () => {
+    voiceButton.classList.add('listening');
+    document.querySelector('#voiceButtonText').textContent = 'Listening...';
+    voiceStatus.textContent = 'Speak your question in Hinglish or English.';
+  };
+  recognition.onresult = event => {
+    let transcript = '';
+    for (let index = event.resultIndex; index < event.results.length; index += 1) transcript += event.results[index][0].transcript;
+    document.querySelector('#question').value = transcript.trim();
+    if (event.results[event.results.length - 1].isFinal) voiceStatus.textContent = 'Voice question captured. Review it, then ask DocuTrust.';
+  };
+  recognition.onerror = event => {
+    voiceStatus.textContent = event.error === 'not-allowed' ? 'Microphone permission was blocked. Allow it in your browser settings.' : `Voice input error: ${event.error}. Please try again.`;
+  };
+  recognition.onend = () => {
+    voiceButton.classList.remove('listening');
+    document.querySelector('#voiceButtonText').textContent = 'Speak question';
+  };
+}
+
+voiceButton.addEventListener('click', () => {
+  if (!recognition) return;
+  recognition.lang = document.querySelector('#voiceLanguage').value;
+  recognition.start();
+});
+
+readAnswerButton.addEventListener('click', () => {
+  const text = document.querySelector('#answerText').textContent.trim();
+  if (!text || !('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = document.querySelector('#voiceLanguage').value;
+  window.speechSynthesis.speak(utterance);
+});
 
 function escapeHtml(value) { const node = document.createElement('div'); node.textContent = value; return node.innerHTML; }
 document.querySelector('#refreshButton').addEventListener('click', loadDocuments);
@@ -147,3 +202,4 @@ async function deleteHistoryEvent(eventId) {
   } catch (error) { uploadStatus.textContent = `Unable to delete audit entry: ${error.message}`; }
 }
 Promise.all([loadDocuments(), loadAnalytics(), loadHistory()]);
+setupVoiceInput();

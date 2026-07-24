@@ -1,6 +1,7 @@
 import math
 import re
 from collections import Counter
+from difflib import get_close_matches
 
 from .models import Evidence
 
@@ -32,7 +33,7 @@ def chunk_pages(document_id: str, pages, chunk_size: int = 900, overlap: int = 1
 
 
 def retrieve(question: str, rows: list[dict], limit: int = 5) -> list[Evidence]:
-    query = _tokens(question)
+    query = corrected_tokens(question, rows)[0]
     if not query or not rows:
         return []
     doc_count = len(rows)
@@ -57,6 +58,48 @@ def retrieve(question: str, rows: list[dict], limit: int = 5) -> list[Evidence]:
                 section=row["section"],
             ))
     return sorted(results, key=lambda evidence: evidence.score, reverse=True)[:limit]
+
+
+def corrected_question(question: str, rows: list[dict]) -> tuple[str, list[dict[str, str]]]:
+    """Correct likely misspelled document keywords before retrieval.
+
+    Corrections are deliberately conservative: only a close vocabulary match in
+    the selected document corpus is accepted, and short words are not changed.
+    """
+    _, corrections = corrected_tokens(question, rows)
+    updated = question
+    for correction in corrections:
+        updated = re.sub(
+            rf"\b{re.escape(correction['original'])}\b",
+            correction["corrected"],
+            updated,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+    return updated, corrections
+
+
+def corrected_tokens(question: str, rows: list[dict]) -> tuple[list[str], list[dict[str, str]]]:
+    """Return normalized query tokens plus visible, corpus-based corrections."""
+    query = _tokens(question)
+    if not query or not rows:
+        return query, []
+    vocabulary = set()
+    for row in rows:
+        vocabulary.update(_tokens(row["text"]))
+    corrected: list[str] = []
+    corrections: list[dict[str, str]] = []
+    for token in query:
+        if token in vocabulary or len(token) < 4 or token.isdigit():
+            corrected.append(token)
+            continue
+        candidate = get_close_matches(token, vocabulary, n=1, cutoff=0.82)
+        if candidate:
+            corrected.append(candidate[0])
+            corrections.append({"original": token, "corrected": candidate[0]})
+        else:
+            corrected.append(token)
+    return corrected, corrections
 
 
 def confidence(evidence: list[Evidence]) -> float:
