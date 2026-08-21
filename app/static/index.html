@@ -20,7 +20,7 @@
           <button class="nav-item" type="button" id="documentsNav"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6V3Zm8 0v5h5M9 12h6m-6 4h6"/></svg> Documents <em id="documentCount">0</em></button>
           <button class="nav-item" type="button" id="analyticsNav"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9m5 10V5m5 14v-7m5 7V3"/></svg> Analytics</button>
         </nav>
-        <div class="nav-right"><div class="workspace-pill"><span></span> Private workspace</div><a class="api-link" href="/docs" target="_blank" rel="noreferrer">API ↗</a></div>
+        <div class="nav-right"><div class="workspace-pill"><span></span> Private workspace</div><div id="userInfo" class="user-info hidden"><span id="userName"></span><button id="logoutButton" class="logout-button">Logout</button></div><button id="loginButton" class="login-button">Login</button><a class="api-link" href="/docs" target="_blank" rel="noreferrer">API ↗</a></div>
       </header>
 
       <main>
@@ -28,6 +28,61 @@
           <div class="breadcrumb"><span class="live-dot"></span> Intelligence console <i>/</i> <b>Evidence workspace</b></div>
           <div class="header-actions"><div class="status"><i></i> System ready</div><button id="themeToggle" class="theme-toggle" type="button" aria-label="Switch to light theme" title="Switch theme"><span id="themeIcon">☼</span></button></div>
         </header>
+
+        <!-- Login Modal -->
+        <div id="loginModal" class="modal hidden">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h2>Login to DocuTrust AI</h2>
+              <button class="close-modal" id="closeLoginModal">&times;</button>
+            </div>
+            <form id="loginForm">
+              <div class="form-group">
+                <label for="loginUsername">Username</label>
+                <input type="text" id="loginUsername" required>
+              </div>
+              <div class="form-group">
+                <label for="loginPassword">Password</label>
+                <input type="password" id="loginPassword" required>
+              </div>
+              <button type="submit" class="primary-button">Login</button>
+              <p class="form-footer">Don't have an account? <a href="#" id="showRegister">Register</a></p>
+            </form>
+          </div>
+        </div>
+
+        <!-- Register Modal -->
+        <div id="registerModal" class="modal hidden">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h2>Register for DocuTrust AI</h2>
+              <button class="close-modal" id="closeRegisterModal">&times;</button>
+            </div>
+            <form id="registerForm">
+              <div class="form-group">
+                <label for="registerUsername">Username</label>
+                <input type="text" id="registerUsername" required>
+              </div>
+              <div class="form-group">
+                <label for="registerEmail">Email</label>
+                <input type="email" id="registerEmail" required>
+              </div>
+              <div class="form-group">
+                <label for="registerPassword">Password</label>
+                <input type="password" id="registerPassword" required minlength="6">
+              </div>
+              <div class="form-group">
+                <label for="registerRole">Role</label>
+                <select id="registerRole">
+                  <option value="user">User</option>
+                  <option value="viewer">Viewer</option>
+                </select>
+              </div>
+              <button type="submit" class="primary-button">Register</button>
+              <p class="form-footer">Already have an account? <a href="#" id="showLogin">Login</a></p>
+            </form>
+          </div>
+        </div>
 
         <section class="hero reveal" id="hero">
           <div class="hero-copy"><p class="eyebrow">Reliable answers, traceable evidence</p><h1>Know exactly<br />where the answer <em>comes from.</em></h1><p>DocuTrust searches your private documents, corrects small query mistakes, and returns answers with page-level evidence.</p><div class="hero-actions"><button class="primary-link" type="button" data-scroll-target="ask">Ask your documents <span>↗</span></button><button class="quiet-link" type="button" id="heroUpload">+ Add a source</button></div></div>
@@ -61,7 +116,29 @@
           </form>
         </section>
 
-        <section id="answerSection" class="answer-card panel hidden" aria-live="polite"><div class="answer-header"><div><p class="eyebrow">Answer</p><h3 id="answerTitle">Evidence-backed response</h3></div><span id="confidenceBadge" class="confidence"></span></div><p id="answerText" class="answer-text"></p><div class="citation-area"><p class="eyebrow">Supporting evidence</p><div id="citations"></div></div></section>
+        <section id="answerSection" class="answer-card panel hidden" aria-live="polite">
+          <div class="answer-header">
+            <div>
+              <p class="eyebrow">Answer</p>
+              <h3 id="answerTitle">Evidence-backed response</h3>
+              <p id="answerSourceMeta" class="answer-source-meta hidden"></p>
+            </div>
+            <div class="answer-badges">
+              <span id="answerSourceBadge" class="source-badge hidden"></span>
+              <span id="confidenceBadge" class="confidence"></span>
+            </div>
+          </div>
+          <div id="answerText" class="answer-text"></div>
+          <div class="citation-area source-verification">
+            <div class="source-verification-header">
+              <div>
+                <p class="eyebrow">Source verification</p>
+                <p id="sourceVerificationSummary" class="source-summary">Compare each citation below with the answer above.</p>
+              </div>
+            </div>
+            <div id="citations"></div>
+          </div>
+        </section>
 
         <section class="history-card panel reveal" id="historySection"><div class="section-heading"><div><p class="eyebrow">Audit trail</p><h3>Recent questions</h3></div><button class="text-button" type="button" id="historyRefresh">Refresh ↻</button></div><div id="historyList" class="history-list"><p class="empty">Your recent questions will appear here.</p></div></section>
 

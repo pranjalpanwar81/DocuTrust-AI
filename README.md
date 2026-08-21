@@ -19,6 +19,8 @@ The project is designed as a final-year AIML project: it has a working FastAPI b
 - [Supported documents and OCR](#supported-documents-and-ocr)
 - [Data model and persistence](#data-model-and-persistence)
 - [Testing](#testing)
+- [Hallucination and faithfulness tests](#hallucination-and-faithfulness-tests)
+- [LLM error handling and logging](#llm-error-handling-and-logging)
 - [Docker](#docker)
 - [Security and limitations](#security-and-limitations)
 - [Project structure](#project-structure)
@@ -38,6 +40,10 @@ The project is designed as a final-year AIML project: it has a working FastAPI b
 - Persist documents, chunks, query history, citations, and analytics in SQLite.
 - Provide document deletion, query-history deletion, document filtering, analytics, a health endpoint, and a lightweight web interface.
 - Run locally, through the provided launcher/Makefile, or as a Docker container.
+- **JWT-based authentication** with secure password hashing and token management.
+- **Role-based access control (RBAC)** with admin, user, and viewer roles.
+- **Document-level permissions** with granular access control and sharing capabilities.
+- **Rate limiting** to prevent API abuse and ensure fair usage.
 
 ## Architecture
 
@@ -155,10 +161,14 @@ cp .env.example .env
 | `OPENAI_API_KEY` | empty | Enables optional OpenAI-compatible answer synthesis. |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Base URL for the compatible Chat Completions endpoint. |
 | `OPENAI_MODEL` | `gpt-4.1-mini` | Model name sent to the compatible endpoint. |
+| `LOG_LEVEL` | `INFO` | Server log verbosity (`DEBUG`, `INFO`, `WARNING`, …). |
 | `TESSERACT_CMD` | empty | Full path to the Tesseract executable when it is not on `PATH`. |
 | `DOCUTRUST_DATA_DIR` | `data` | Directory containing the SQLite database. |
 | `MAX_UPLOAD_BYTES` | `15728640` (15 MiB) | Maximum accepted upload size in bytes. |
 | `RETRIEVAL_THRESHOLD` | `0.12` | Minimum derived confidence for a `grounded` result. |
+| `JWT_SECRET_KEY` | `your-secret-key-change-this-in-production` | Secret key for JWT token signing. Generate with `openssl rand -hex 32`. |
+| `JWT_ALGORITHM` | `HS256` | Algorithm used for JWT token encoding. |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | JWT token expiration time in minutes. |
 
 Example optional LLM configuration:
 
@@ -177,7 +187,7 @@ When the key is empty, the application remains fully usable: it returns a source
 3. Confirm the indexed document list and chunk count.
 4. Ask a specific, document-grounded question such as “Who approves leave requests?”
 5. Read `answer_status` and `confidence` before relying on the answer.
-6. Open the citations and verify the supporting quote against the original document and page.
+6. Open the **Source verification** panel and confirm document name, page, relevance score, chunk ID, and supporting quote match the answer.
 
 For high-confidence results, write questions using terminology that appears in the source document. A lexical baseline does not understand synonyms as well as an embedding retriever.
 
@@ -189,19 +199,35 @@ All JSON response schemas are also available interactively at `/docs` while the 
 | --- | --- | --- |
 | `GET` | `/` | Serves the web interface. |
 | `GET` | `/health` | Returns service status, whether optional LLM synthesis is enabled, and indexed-document count. |
-| `POST` | `/api/v1/documents` | Upload and index a document (`multipart/form-data`, field name: `file`). |
-| `GET` | `/api/v1/documents` | List indexed documents and their chunk counts. |
-| `DELETE` | `/api/v1/documents/{document_id}` | Delete a source document and all chunks derived from it. |
-| `DELETE` | `/api/v1/documents` | Delete all indexed documents and chunks. |
-| `POST` | `/api/v1/query` | Ask a question and receive an answer, status, confidence, citations, and audit event ID. |
-| `GET` | `/api/v1/query-history` | Return recent query audit events; `limit` is clamped between 1 and 50. |
-| `DELETE` | `/api/v1/query-history/{event_id}` | Delete one query-history event. |
-| `GET` | `/api/v1/analytics` | Return document, chunk, query, confidence, and grounded-rate metrics. |
+| `POST` | `/api/v1/auth/register` | Register a new user account. |
+| `POST` | `/api/v1/auth/login` | Authenticate user and receive JWT token. |
+| `GET` | `/api/v1/auth/me` | Get current user information (requires authentication). |
+| `GET` | `/api/v1/users` | List all users (admin only). |
+| `PUT` | `/api/v1/users/{username}/role` | Update user role (admin only). |
+| `PUT` | `/api/v1/users/{username}/disable` | Enable or disable user account (admin only). |
+| `POST` | `/api/v1/documents` | Upload and index a document (`multipart/form-data`, field name: `file`). Requires authentication. |
+| `GET` | `/api/v1/documents` | List indexed documents and their chunk counts (requires authentication). |
+| `DELETE` | `/api/v1/documents/{document_id}` | Delete a source document and all chunks derived from it. Requires authentication. |
+| `DELETE` | `/api/v1/documents` | Delete all indexed documents and chunks (admin only). |
+| `POST` | `/api/v1/documents/{document_id}/permissions` | Grant document permission to a user. |
+| `DELETE` | `/api/v1/documents/{document_id}/permissions/{username}` | Revoke document permission from a user. |
+| `POST` | `/api/v1/query` | Ask a question and receive an answer, status, confidence, citations, and audit event ID. Requires authentication. |
+| `GET` | `/api/v1/query-history` | Return recent query audit events; `limit` is clamped between 1 and 50. Requires authentication. |
+| `DELETE` | `/api/v1/query-history/{event_id}` | Delete one query-history event. Requires authentication. |
+| `GET` | `/api/v1/analytics` | Return document, chunk, query, confidence, and grounded-rate metrics. Requires authentication. |
 
 ### Upload a document
 
 ```bash
+# First, authenticate to get a token
+TOKEN=$(curl -X POST http://127.0.0.1:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}' \
+  | jq -r '.access_token')
+
+# Then upload with authentication
 curl -X POST http://127.0.0.1:8000/api/v1/documents \
+  -H "Authorization: Bearer $TOKEN" \
   -F "file=@./leave-policy.pdf"
 ```
 
@@ -242,6 +268,8 @@ Query responses use this shape:
 {
   "answer": "Most relevant information: Leave requests must be approved by the reporting manager within five working days.",
   "answer_status": "grounded",
+  "answer_source": "deterministic",
+  "synthesis_error": "api_key_missing",
   "confidence": 0.42,
   "citations": [
     {
@@ -262,6 +290,14 @@ Query responses use this shape:
 
 - `grounded`: evidence exists and meets the configured confidence threshold.
 - `insufficient_evidence`: no evidence was found or the best evidence did not meet the threshold. The answer text explains that the application cannot answer reliably.
+
+`answer_source` tells you how the answer was produced:
+
+- `llm`: optional synthesis succeeded and the response was generated from cited sources.
+- `deterministic`: the answer was copied or formatted from retrieved evidence (also used when the LLM is disabled or fails).
+- `abstained`: no grounded answer was returned.
+
+When `answer_source` is `deterministic` and an LLM key is configured, check `synthesis_error` for the fallback reason (`timeout`, `http_401`, `network_error`, `malformed_response`, `llm_abstained`, or `api_key_missing`).
 
 ### Inspect service state
 
@@ -307,7 +343,7 @@ This is a heuristic confidence value, not a calibrated probability. It should be
 
 Without an API key, the deterministic writer copies only from the best evidence chunk and provides focused excerpts. It includes special formatting for common invoice fields (invoice number, billing period, due date, and total) and date-range questions.
 
-With an API key, the app sends retrieved sources to an OpenAI-compatible endpoint with instructions to use only those sources and to return `INSUFFICIENT_EVIDENCE` when unsupported. If that call fails, the API safely falls back to the deterministic response.
+With an API key, the app sends retrieved sources to an OpenAI-compatible endpoint (OpenAI, Azure OpenAI, or any provider exposing `/v1/chat/completions`, including Claude through an OpenAI-compatible proxy) with instructions to use only those sources and to return `INSUFFICIENT_EVIDENCE` when unsupported. If that call fails, the API safely falls back to the deterministic response and records a machine-readable `synthesis_error` in the query response while logging the failure server-side.
 
 ## Supported documents and OCR
 
@@ -352,7 +388,57 @@ or:
 make test
 ```
 
-The existing suite validates relevant evidence retrieval, abstention when there is no term overlap, numeric relevance scores, grounded date answers, focused source excerpts, and invoice-field extraction.
+The existing suite validates relevant evidence retrieval, abstention when there is no term overlap, numeric relevance scores, grounded date answers, focused source excerpts, invoice-field extraction, LLM synthesis fallbacks, and hallucination guardrails.
+
+## Hallucination and faithfulness tests
+
+DocuTrust is designed to reduce unsupported answers. The automated suite in `tests/test_hallucination.py` and `tests/test_retrieval.py` covers the core guardrails; the manual cases below show how we verify the problem we claim to solve: **answers must be traceable to uploaded evidence, and the system must abstain when evidence is missing.**
+
+### Automated cases (run with `pytest tests/test_hallucination.py -q`)
+
+| Case | Question (example) | Indexed content | Expected |
+| --- | --- | --- | --- |
+| No supporting document | `What is our encryption standard?` | Office-hours note only | Empty retrieval → API abstains |
+| Out-of-corpus fact | `When was the company founded?` | Leave-policy text only | Empty retrieval → API abstains |
+| Wrong domain | `What was Q3 revenue?` | Leave-policy text only | Empty retrieval → API abstains |
+| Grounded control | `Who approves leave requests?` | Matching leave-policy passage | Evidence retrieved on page 2 |
+
+### Manual verification checklist (UI or API)
+
+Use these after uploading a small test corpus (for example one leave-policy PDF and one invoice image):
+
+| # | Scenario | Example question | Expected behaviour | How to verify |
+| --- | --- | --- | --- | --- |
+| 1 | Missing topic | `What is our encryption standard?` with no security doc uploaded | `insufficient_evidence` | Answer text refuses; source verification panel shows no citations |
+| 2 | Keyword overlap, wrong context | `Who approves expenses?` against a leave-policy that mentions “manager” | Abstain or cite a passage that does **not** support the claim | Read the supporting quote in **Source verification** — it must not justify the answer |
+| 3 | Invented fact pressure | `When was the company founded?` when the date is absent | Abstain even with LLM enabled | `answer_status` is `insufficient_evidence` |
+| 4 | Numeric hallucination pressure | `Summarize Q3 revenue` when only HR policy is indexed | Abstain or excerpt-only answer with no invented numbers | Answer must not contain figures absent from citations |
+| 5 | Cross-document confusion | Two policies uploaded; question scoped to one document | Citations come only from the selected document | Use **Search only this document** in the UI and confirm `document_name` matches |
+| 6 | Threshold boundary | Weakly related question | `insufficient_evidence` when confidence < `RETRIEVAL_THRESHOLD` | Confidence badge below threshold; no grounded badge |
+| 7 | Typo recovery control | `What is the amunt payable?` on an invoice | Grounded answer after spell correction | Corrections banner + citation from invoice chunk |
+
+For each grounded answer, open the **Source verification** panel in the UI (or inspect `citations` in the API response) and confirm every claim in the answer appears in the cited quote on the named document and page.
+
+## LLM error handling and logging
+
+Optional synthesis uses an OpenAI-compatible Chat Completions endpoint. When the provider is unreachable, returns an HTTP error, times out, or sends malformed JSON, DocuTrust **does not fail the query**. Instead:
+
+1. The server logs a warning with the failure type (never the API key or full document text).
+2. The API returns a deterministic answer from retrieved evidence.
+3. The response includes `answer_source: "deterministic"` and `synthesis_error` (for example `timeout`, `http_429`, `network_error`).
+4. The UI shows a fallback notice under the answer badge.
+
+Example log lines (also written to `server.log` when using `./start.sh`):
+
+```text
+WARNING [app.synthesis] LLM synthesis timed out after 20s (model=gpt-4.1-mini, base_url=https://api.openai.com/v1). Falling back to deterministic answer.
+WARNING [app.synthesis] LLM synthesis HTTP error 401 (model=gpt-4.1-mini): {"error":"invalid_api_key"}. Falling back to deterministic answer.
+INFO [app.main] Query used deterministic fallback after synthesis issue: timeout
+```
+
+Configure log verbosity with `LOG_LEVEL=DEBUG` in `.env` if needed.
+
+Simulate a provider failure locally by setting an invalid `OPENAI_API_KEY`, stopping network access, or pointing `OPENAI_BASE_URL` at an unreachable host — the query endpoint should still return a grounded deterministic answer when retrieval succeeds.
 
 ## Docker
 
@@ -407,7 +493,9 @@ Lexical matching can miss semantic matches and may rank a keyword match that lac
 │   ├── models.py               # Evidence and extracted-page models
 │   └── static/                 # Browser UI assets
 ├── tests/
-│   └── test_retrieval.py       # Retrieval and answer-format tests
+│   ├── test_retrieval.py       # Retrieval and answer-format tests
+│   ├── test_synthesis.py       # LLM failure and fallback tests
+│   └── test_hallucination.py   # Abstention and faithfulness guardrails
 ├── scripts/
 │   └── generate_docutrust_project_report.py
 ├── output/pdf/
