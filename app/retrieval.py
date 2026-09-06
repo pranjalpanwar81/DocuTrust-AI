@@ -14,12 +14,14 @@ DATE_VALUE = re.compile(r"\d{1,2}[/-]\d{1,2}[/-]\d{4}")
 MONEY = re.compile(r"(?:€|₹|\$)\s?\d+(?:[.,]\d{2})|(?:Rs\.?\s*)\d+(?:[.,]\d{2})?", re.IGNORECASE)
 NAME_FIELD = re.compile(
     r"\b(?:student\s+name|applicant\s+name|candidate\s+name|full\s+name|name)\s*[:\-]\s*"
-    r"([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,3})(?=\s*(?:\||$|,|;|\n))",
+    r"([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,3})"
+    r"(?=\s*(?:\||$|,|;|\n|email\b|e-mail\b|phone\b|mobile\b|contact\b|linkedin\b|github\b))",
     re.IGNORECASE,
 )
 NAME_HEADER = re.compile(
     r"^\s*([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,3})"
-    r"(?=\s+(?:email|e-mail|phone|mobile|contact|linkedin|github)\b|\s*\|)",
+    r"(?=\s+(?:email|e-mail|phone|mobile|contact|linkedin|github)\b|\s*\||"
+    r"\s+(?:projects|education|skills|experience|summary|objective|certifications)\b)",
     re.IGNORECASE,
 )
 IDENTITY_TERMS = {"student", "applicant", "candidate", "name", "named"}
@@ -48,7 +50,7 @@ def retrieve(question: str, rows: list[dict], limit: int = 5) -> list[Evidence]:
     query = corrected_tokens(question, rows)[0]
     if not query or not rows:
         return []
-    identity_question = bool(set(query) & IDENTITY_TERMS)
+    identity_question = is_identity_question(question, query)
     doc_count = len(rows)
     document_frequency = Counter({token: sum(token in _tokens(row["text"]) for row in rows) for token in query})
     results: list[Evidence] = []
@@ -144,7 +146,7 @@ def focused_excerpt(question: str, text: str, max_length: int = 300) -> str:
 def concise_answer(question: str, evidence: list[Evidence]) -> str:
     """Safe no-LLM answer writer; facts are copied only from top evidence."""
     top = evidence[0]
-    if set(_tokens(question)) & IDENTITY_TERMS:
+    if is_identity_question(question, _tokens(question)):
         person_name = extract_person_name(top.text)
         if person_name:
             return f"Student name: {person_name}."
@@ -190,6 +192,16 @@ def extract_person_name(text: str) -> Optional[str]:
     if not match:
         match = NAME_HEADER.search(text)
     return " ".join(match.group(1).split()) if match else None
+
+
+def is_identity_question(question: str, query_tokens: list[str]) -> bool:
+    """Recognize name questions even when identity words contain typos."""
+    if set(query_tokens) & IDENTITY_TERMS:
+        return True
+    for token in _tokens(question):
+        if get_close_matches(token, IDENTITY_TERMS, n=1, cutoff=0.72):
+            return True
+    return False
 
 
 def _tokens(text: str) -> list[str]:

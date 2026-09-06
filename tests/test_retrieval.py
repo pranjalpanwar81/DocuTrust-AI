@@ -68,3 +68,12 @@ def test_identity_question_abstains_without_name_field():
     rows = [{"id": "project", "document_id": "doc-1", "page_number": 1, "section": None, "text": "Projects include a campus placement management platform.", "filename": "resume.pdf"}]
 
     assert retrieve("What is the student name?", rows) == []
+
+
+def test_identity_question_handles_resume_section_header():
+    rows = [{"id": "identity", "document_id": "doc-1", "page_number": 1, "section": None, "text": "Pranjal Panwar Projects Placency AI-powered platform", "filename": "resume.pdf"}]
+
+    evidence = retrieve("what is the studnt nam", rows)
+
+    assert evidence
+    assert concise_answer("what is the studnt nam", evidence) == "Student name: Pranjal Panwar."
