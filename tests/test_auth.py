@@ -1,6 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
-from app.main import app
+from app.main import app, limiter
 from app.database import Database
 from app.auth import get_password_hash, verify_password, create_access_token, decode_access_token
 from pathlib import Path
@@ -20,8 +20,11 @@ def test_db():
 @pytest.fixture
 def test_client(test_db):
     """Create a test client with test database."""
-    from app.dependencies import _database
-    _database.__dict__['_database'] = test_db
+    limiter._storage.reset()
+    import app.main as main
+    from app.dependencies import set_database
+    main.database = test_db
+    set_database(test_db)
     
     with TestClient(app) as client:
         yield client
@@ -79,6 +82,32 @@ def test_user_registration(test_client):
     data = response.json()
     assert data["username"] == "testuser"
     assert "message" in data
+
+
+def test_public_registration_cannot_create_admin(test_client):
+    """Public registration must never grant administrative privileges."""
+    response = test_client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": "attacker",
+            "email": "attacker@example.com",
+            "password": "testpass123",
+            "role": "admin",
+        },
+    )
+
+    assert response.status_code == 201
+    login_response = test_client.post(
+        "/api/v1/auth/login",
+        json={"username": "attacker", "password": "testpass123"},
+    )
+    token = login_response.json()["access_token"]
+    me_response = test_client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert me_response.json()["role"] == "user"
 
 
 def test_user_registration_duplicate_username(test_client):
@@ -280,15 +309,12 @@ def test_admin_endpoint_without_admin_role(test_client):
 
 def test_admin_endpoint_with_admin_role(test_client):
     """Test accessing admin endpoint with admin role."""
-    # Register admin user
-    test_client.post(
-        "/api/v1/auth/register",
-        json={
-            "username": "adminuser",
-            "email": "admin@example.com",
-            "password": "adminpass123",
-            "role": "admin"
-        }
+    from app.dependencies import get_database
+    get_database().create_user(
+        username="adminuser",
+        email="admin@example.com",
+        hashed_password=get_password_hash("adminpass123"),
+        role="admin",
     )
     
     login_response = test_client.post(

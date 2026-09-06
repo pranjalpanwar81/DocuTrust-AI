@@ -72,7 +72,7 @@ async def register(request: Request, user_data: UserCreate):
         username=user_data.username,
         email=user_data.email,
         hashed_password=hashed_password,
-        role=user_data.role
+        role="user"
     )
     
     if not success:

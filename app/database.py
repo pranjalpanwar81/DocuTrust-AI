@@ -9,10 +9,44 @@ from app.config import settings
 # Try to import psycopg2 for PostgreSQL support
 try:
     import psycopg2
-    from psycopg2 import sql
+    from psycopg2.extras import DictCursor
     POSTGRES_AVAILABLE = True
 except ImportError:
     POSTGRES_AVAILABLE = False
+
+
+class PostgresConnection:
+    """Small compatibility layer for the SQLite-style database methods."""
+
+    def __init__(self, connection) -> None:
+        self.connection = connection
+
+    @staticmethod
+    def _query(query: str) -> str:
+        return query.replace("?", "%s")
+
+    def execute(self, query: str, parameters=()):
+        cursor = self.connection.cursor()
+        cursor.execute(self._query(query), parameters)
+        return cursor
+
+    def executemany(self, query: str, parameters):
+        cursor = self.connection.cursor()
+        cursor.executemany(self._query(query), parameters)
+        return cursor
+
+    def executescript(self, script: str) -> None:
+        for statement in script.split(";"):
+            if statement.strip():
+                self.execute(statement)
+
+    def close(self) -> None:
+        self.connection.close()
+
+
+INTEGRITY_ERRORS = (sqlite3.IntegrityError,)
+if POSTGRES_AVAILABLE:
+    INTEGRITY_ERRORS = (sqlite3.IntegrityError, psycopg2.IntegrityError)
 
 
 SCHEMA = """
@@ -68,7 +102,7 @@ CREATE TABLE IF NOT EXISTS query_events (
 
 class Database:
     def __init__(self, path: Path = None) -> None:
-        self.use_postgres = POSTGRES_AVAILABLE and settings.database_url is not None
+        self.use_postgres = POSTGRES_AVAILABLE and bool(settings.database_url)
         
         if self.use_postgres:
             self.connection_params = self._parse_postgres_url(settings.database_url)
@@ -95,21 +129,14 @@ class Database:
     def _init_postgres(self):
         """Initialize PostgreSQL database with schema."""
         with self.connect() as connection:
-            cursor = connection.cursor()
-            # Create tables one by one for PostgreSQL
-            tables = SCHEMA.split(';')
-            for table_sql in tables:
-                if table_sql.strip():
-                    # Convert SQLite syntax to PostgreSQL where needed
-                    pg_sql = table_sql.replace("INTEGER", "INTEGER")
-                    cursor.execute(pg_sql)
-            connection.commit()
+            connection.executescript(SCHEMA)
 
     @contextmanager
     def connect(self):
         if self.use_postgres:
-            connection = psycopg2.connect(**self.connection_params)
+            connection = psycopg2.connect(**self.connection_params, cursor_factory=DictCursor)
             connection.autocommit = True
+            connection = PostgresConnection(connection)
         else:
             connection = sqlite3.connect(self.path)
             connection.row_factory = sqlite3.Row
@@ -125,8 +152,8 @@ class Database:
     def add_document(self, record: dict, chunks: list[dict]) -> None:
         with self.connect() as connection:
             connection.execute(
-                "INSERT INTO documents (id, filename, media_type, uploaded_at, page_count, extraction_method, owner_username, is_public) VALUES (:id, :filename, :media_type, :uploaded_at, :page_count, :extraction_method, :owner_username, :is_public)",
-                record,
+                "INSERT INTO documents (id, filename, media_type, uploaded_at, page_count, extraction_method, owner_username, is_public) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (record["id"], record["filename"], record["media_type"], record["uploaded_at"], record["page_count"], record["extraction_method"], record["owner_username"], record["is_public"]),
             )
             connection.executemany(
                 "INSERT INTO chunks VALUES (:id, :document_id, :page_number, :section, :text)", chunks,
@@ -149,9 +176,12 @@ class Database:
         return [dict(row) for row in rows]
 
     def add_query_event(self, record: dict) -> None:
-        record["citation_ids"] = json.dumps(record["citation_ids"])
+        citation_ids = json.dumps(record["citation_ids"])
         with self.connect() as connection:
-            connection.execute("INSERT INTO query_events VALUES (:id, :created_at, :question, :answer_status, :confidence, :citation_ids)", record)
+            connection.execute(
+                "INSERT INTO query_events VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (record["id"], record["created_at"], record["question"], record["answer_status"], record["confidence"], citation_ids, record.get("username")),
+            )
 
     def delete_document(self, document_id: str) -> bool:
         """Delete one source document and every searchable chunk derived from it."""
@@ -189,7 +219,7 @@ class Database:
             document_count = connection.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
             chunk_count = connection.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
             query_count, average_confidence, grounded_count = connection.execute(
-                "SELECT COUNT(*), AVG(confidence), COALESCE(SUM(answer_status = 'grounded'), 0) FROM query_events"
+                "SELECT COUNT(*), AVG(confidence), COALESCE(SUM(CASE WHEN answer_status = 'grounded' THEN 1 ELSE 0 END), 0) FROM query_events"
             ).fetchone()
         return {
             "document_count": document_count,
@@ -208,7 +238,7 @@ class Database:
                     (username, email, hashed_password, role, datetime.now(timezone.utc).isoformat())
                 )
             return True
-        except sqlite3.IntegrityError:
+        except INTEGRITY_ERRORS:
             return False
 
     def get_user(self, username: str) -> dict:
@@ -245,7 +275,7 @@ class Database:
                     (str(uuid4()), document_id, username, permission_level, datetime.now(timezone.utc).isoformat())
                 )
             return True
-        except sqlite3.IntegrityError:
+        except INTEGRITY_ERRORS:
             return False
 
     def revoke_document_permission(self, document_id: str, username: str) -> bool:

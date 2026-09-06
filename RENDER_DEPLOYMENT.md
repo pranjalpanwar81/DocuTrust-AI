@@ -18,7 +18,13 @@ git commit -m "Add Render deployment configuration"
 git push origin main
 ```
 
-## Step 2: Set Up PostgreSQL Database on Render
+## Step 2: Set Up Persistent Storage
+
+PostgreSQL is recommended for production. If you choose SQLite instead, attach a
+persistent Render disk and set `DOCUTRUST_DATA_DIR` to its mount path. Without
+persistent storage, users, documents, and query history can be lost on redeploy.
+
+### PostgreSQL
 
 1. Go to [Render.com](https://render.com) and log in
 2. Click **"New +"** button
@@ -31,7 +37,8 @@ git push origin main
    - **Plan**: Free tier is fine for development
 5. Click **"Create Database"**
 
-**Important**: Save the **Internal Database URL** from the dashboard - you'll need this for the next step.
+**Important**: Save the **Internal Database URL** from the dashboard. The
+application creates its tables automatically at startup.
 
 ## Step 3: Deploy Web Service
 
@@ -53,7 +60,7 @@ git push origin main
 
 5. **Environment Variables** - Add the following:
 
-   **Required for Production:**
+  **Required for PostgreSQL production:**
    ```
    DATABASE_URL = [Your PostgreSQL Internal Database URL from Step 2]
    JWT_SECRET_KEY = [Generate a strong secret key: openssl rand -hex 32]
@@ -83,21 +90,17 @@ git push origin main
 Once your service is deployed, you'll need to create the first admin user:
 
 1. Wait for the deployment to complete (green status)
-2. Access your application at the provided URL (e.g., `https://docutrust-ai.onrender.com`)
-3. Use the API to create an admin user:
+2. Open the Render shell for the service and create the admin account. Public
+   registration always creates a regular user and cannot create an admin:
 
 ```bash
-curl -X POST https://docutrust-ai.onrender.com/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "admin",
-    "email": "admin@example.com",
-    "password": "your_secure_password",
-    "role": "admin"
-  }'
+export ADMIN_USERNAME=admin
+export ADMIN_EMAIL=admin@example.com
+export ADMIN_PASSWORD='your_secure_password'
+python scripts/create_admin.py
 ```
 
-4. Login with your admin credentials:
+3. Login with your admin credentials:
 ```bash
 curl -X POST https://docutrust-ai.onrender.com/api/v1/auth/login \
   -H "Content-Type: application/json" \
@@ -117,8 +120,8 @@ curl -X POST https://docutrust-ai.onrender.com/api/v1/auth/login \
 ## Important Notes
 
 ### Database Persistence
-- The free PostgreSQL tier on Render includes 90 days of data retention
-- For production, consider upgrading to a paid plan or use external database services
+- PostgreSQL persists data independently of web-service redeploys.
+- SQLite requires a persistent Render disk mounted at the configured data directory.
 
 ### File Uploads
 - Render's filesystem is ephemeral - files uploaded during runtime will be lost on redeployment
@@ -147,7 +150,7 @@ curl -X POST https://docutrust-ai.onrender.com/api/v1/auth/login \
 ### Deployment Fails
 - Check the deployment logs in Render dashboard
 - Ensure all dependencies are in `requirements.txt`
-- Verify the Procfile is correct
+- Verify the start command binds to `0.0.0.0` and uses `$PORT`
 
 ### Database Connection Issues
 - Verify `DATABASE_URL` is set correctly
