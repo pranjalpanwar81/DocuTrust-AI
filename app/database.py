@@ -276,6 +276,10 @@ class Database:
             rows = connection.execute("SELECT username, email, role, disabled, created_at FROM users").fetchall()
         return [self._row_to_dict(row) for row in rows]
 
+    def has_users(self) -> bool:
+        with self.connect() as connection:
+            return connection.execute("SELECT 1 FROM users LIMIT 1").fetchone() is not None
+
     def update_user_role(self, username: str, new_role: str) -> bool:
         """Update user role."""
         with self.connect() as connection:

@@ -43,6 +43,14 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 database = Database(settings.data_dir / "docutrust.db")
 set_database(database)
 
+if settings.admin_username and settings.admin_email and settings.admin_password and not database.has_users():
+    database.create_user(
+        username=settings.admin_username,
+        email=settings.admin_email,
+        hashed_password=get_password_hash(settings.admin_password),
+        role="admin",
+    )
+
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 

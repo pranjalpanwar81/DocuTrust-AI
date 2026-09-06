@@ -24,6 +24,9 @@ class Settings:
     access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
     # Database settings for production
     database_url: Optional[str] = os.getenv("DATABASE_URL")  # For PostgreSQL on Render
+    admin_username: Optional[str] = (os.getenv("ADMIN_USERNAME") or "").strip() or None
+    admin_email: Optional[str] = (os.getenv("ADMIN_EMAIL") or "").strip() or None
+    admin_password: Optional[str] = os.getenv("ADMIN_PASSWORD") or None
 
 
 settings = Settings()

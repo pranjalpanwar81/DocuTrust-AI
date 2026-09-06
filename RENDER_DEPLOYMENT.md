@@ -66,6 +66,9 @@ application creates its tables automatically at startup.
    JWT_SECRET_KEY = [Generate a strong secret key: openssl rand -hex 32]
    JWT_ALGORITHM = HS256
    ACCESS_TOKEN_EXPIRE_MINUTES = 30
+   ADMIN_USERNAME = admin
+   ADMIN_EMAIL = your-email@example.com
+   ADMIN_PASSWORD = your-strong-password
    ```
 
    **Optional (for LLM features):**
@@ -90,8 +93,9 @@ application creates its tables automatically at startup.
 Once your service is deployed, you'll need to create the first admin user:
 
 1. Wait for the deployment to complete (green status)
-2. Open the Render shell for the service and create the admin account. Public
-   registration always creates a regular user and cannot create an admin:
+2. The first admin account is created automatically at startup when the three
+   `ADMIN_*` variables are present and the database has no users. Public
+   registration always creates a regular user and cannot create an admin.
 
 ```bash
 export ADMIN_USERNAME=admin
