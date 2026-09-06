@@ -7,3 +7,9 @@ data/
 .pytest_cache/
 server.log
 server.pid
+.DS_Store
+*.DS_Store
+output/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
