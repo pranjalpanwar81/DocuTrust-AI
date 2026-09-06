@@ -231,24 +231,24 @@ async def delete_query_history_event(event_id: str, current_user: dict = Depends
 
 @app.post("/api/v1/query")
 @limiter.limit("30/minute")
-async def ask(http_request: Request, request: QueryRequest, current_user: dict = Depends(get_current_user)):
+async def ask(request: Request, query_request: QueryRequest, current_user: dict = Depends(get_current_user)):
     """Ask a question with document access control (requires authentication)."""
     rows = database.all_chunks()
     
     # Filter chunks based on document access permissions
-    if request.document_ids:
+    if query_request.document_ids:
         # Check if user has access to all requested documents
-        for doc_id in request.document_ids:
+        for doc_id in query_request.document_ids:
             if not database.check_document_access(doc_id, current_user["username"], current_user["role"]):
                 raise HTTPException(403, f"You do not have access to document {doc_id}")
-        rows = [row for row in rows if row["document_id"] in request.document_ids]
+        rows = [row for row in rows if row["document_id"] in query_request.document_ids]
     else:
         # Filter to only accessible documents
         accessible_docs = database.get_user_accessible_documents(current_user["username"], current_user["role"])
         accessible_doc_ids = {doc["id"] for doc in accessible_docs}
         rows = [row for row in rows if row["document_id"] in accessible_doc_ids]
     
-    interpreted_question, corrections = corrected_question(request.question, rows)
+    interpreted_question, corrections = corrected_question(query_request.question, rows)
     evidence = retrieve(interpreted_question, rows)
     score = confidence(evidence)
     status = "grounded" if score >= settings.retrieval_threshold and evidence else "insufficient_evidence"
@@ -264,7 +264,7 @@ async def ask(http_request: Request, request: QueryRequest, current_user: dict =
     event = {
         "id": str(uuid4()),
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "question": request.question,
+        "question": query_request.question,
         "answer_status": status,
         "confidence": score,
         "citation_ids": [item.chunk_id for item in evidence],

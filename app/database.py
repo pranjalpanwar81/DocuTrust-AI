@@ -117,6 +117,26 @@ class Database:
             self.path = path
             with self.connect() as connection:
                 connection.executescript(SCHEMA)
+                self._migrate_sqlite(connection)
+
+    @staticmethod
+    def _migrate_sqlite(connection: sqlite3.Connection) -> None:
+        migrations = {
+            "documents": {
+                "owner_username": "TEXT NOT NULL DEFAULT 'admin'",
+                "is_public": "INTEGER DEFAULT 0",
+            },
+            "query_events": {
+                "username": "TEXT",
+            },
+        }
+        for table, columns in migrations.items():
+            existing_columns = {
+                row[1] for row in connection.execute(f"PRAGMA table_info({table})").fetchall()
+            }
+            for column, definition in columns.items():
+                if column not in existing_columns:
+                    connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     def _init_postgres(self):
         """Initialize PostgreSQL database with schema."""

@@ -1,8 +1,10 @@
 import pytest
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 from app.main import app, limiter
 from app.database import Database
 from app.auth import get_password_hash, verify_password, create_access_token, decode_access_token
+from app.synthesis import SynthesisResult
 from pathlib import Path
 import tempfile
 import os
@@ -395,3 +397,42 @@ def test_document_upload_with_auth(test_client):
     )
     
     assert response.status_code == 201
+
+
+def test_query_endpoint_returns_grounded_answer(test_client):
+    """The rate-limited query endpoint must receive and handle the request object."""
+    from app.dependencies import get_database
+
+    test_client.post(
+        "/api/v1/auth/register",
+        json={"username": "queryuser", "email": "query@example.com", "password": "testpass123"},
+    )
+    login_response = test_client.post(
+        "/api/v1/auth/login",
+        json={"username": "queryuser", "password": "testpass123"},
+    )
+    token = login_response.json()["access_token"]
+    get_database().add_document(
+        {
+            "id": "query-doc",
+            "filename": "resume.txt",
+            "media_type": "text/plain",
+            "uploaded_at": "2026-09-06T00:00:00+00:00",
+            "page_count": 1,
+            "extraction_method": "plain_text",
+            "owner_username": "queryuser",
+            "is_public": 0,
+        },
+        [{"id": "query-chunk", "document_id": "query-doc", "page_number": 1, "section": None, "text": "Student Name: Priya Sharma"}],
+    )
+
+    with patch("app.main.synthesize", return_value=SynthesisResult(None, "fallback", "api_key_missing")):
+        response = test_client.post(
+            "/api/v1/query",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"question": "What is the student name?"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["answer_status"] == "grounded"
+    assert "Priya Sharma" in response.json()["answer"]
