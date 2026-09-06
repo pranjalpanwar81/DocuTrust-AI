@@ -473,8 +473,8 @@ async function deleteHistoryEvent(eventId) {
 }
 
 // Authentication event listeners
-document.querySelector('#loginButton').addEventListener('click', () => {
-  openModal('loginModal');
+document.addEventListener('click', event => {
+  if (event.target.closest('#loginButton')) openModal('loginModal');
 });
 
 document.querySelector('#closeLoginModal').addEventListener('click', () => {
