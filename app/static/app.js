@@ -36,8 +36,8 @@ function updateAuthUI() {
   }
 }
 
-function handleAuthError(response) {
-  if (response.status === 401 || response.status === 403) {
+function handleAuthError(response, requestToken = authToken) {
+  if ((response.status === 401 || response.status === 403) && requestToken && requestToken === authToken) {
     logout();
     return true;
   }
@@ -113,11 +113,17 @@ function closeModal(modalId) {
 }
 
 async function loadDocuments() {
+  const requestToken = authToken;
   const response = await fetch('/api/v1/documents', {
-    headers: getAuthHeaders()
+    headers: requestToken ? { Authorization: `Bearer ${requestToken}` } : {}
   });
   
-  if (handleAuthError(response)) {
+  if (handleAuthError(response, requestToken)) {
+    list.innerHTML = '<p class="empty">Please login to view documents.</p>';
+    return;
+  }
+
+  if (!response.ok) {
     list.innerHTML = '<p class="empty">Please login to view documents.</p>';
     return;
   }
@@ -412,11 +418,12 @@ async function deleteSources(url, message) {
 }
 
 async function loadAnalytics() {
+  const requestToken = authToken;
   const response = await fetch('/api/v1/analytics', {
-    headers: getAuthHeaders()
+    headers: requestToken ? { Authorization: `Bearer ${requestToken}` } : {}
   });
   
-  if (handleAuthError(response)) {
+  if (handleAuthError(response, requestToken)) {
     return;
   }
   
@@ -429,11 +436,12 @@ async function loadAnalytics() {
 }
 
 async function loadHistory() {
+  const requestToken = authToken;
   const response = await fetch('/api/v1/query-history', {
-    headers: getAuthHeaders()
+    headers: requestToken ? { Authorization: `Bearer ${requestToken}` } : {}
   });
   
-  if (handleAuthError(response)) {
+  if (handleAuthError(response, requestToken)) {
     return;
   }
   
