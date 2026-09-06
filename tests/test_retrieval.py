@@ -77,3 +77,12 @@ def test_identity_question_handles_resume_section_header():
 
     assert evidence
     assert concise_answer("what is the studnt nam", evidence) == "Student name: Pranjal Panwar."
+
+
+def test_identity_question_uses_resume_filename_when_pdf_text_has_no_name():
+    rows = [{"id": "identity", "document_id": "doc-1", "page_number": 1, "section": None, "text": "Projects Placency AI-powered platform", "filename": "Pranjal_Panwar_Resume.pdf"}]
+
+    evidence = retrieve("applicant name", rows)
+
+    assert evidence
+    assert concise_answer("applicant name", evidence) == "Student name: Pranjal Panwar."

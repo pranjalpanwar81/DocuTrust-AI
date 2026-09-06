@@ -25,6 +25,7 @@ NAME_HEADER = re.compile(
     re.IGNORECASE,
 )
 IDENTITY_TERMS = {"student", "applicant", "candidate", "name", "named"}
+FILENAME_NAME_WORDS = {"resume", "cv", "curriculum", "vitae", "profile", "applicant", "candidate", "student", "name"}
 
 
 def chunk_pages(document_id: str, pages, chunk_size: int = 900, overlap: int = 150) -> list[dict]:
@@ -56,7 +57,9 @@ def retrieve(question: str, rows: list[dict], limit: int = 5) -> list[Evidence]:
     results: list[Evidence] = []
     for row in rows:
         tokens = _tokens(row["text"])
-        person_name = extract_person_name(row["text"]) if identity_question else None
+        person_name = None
+        if identity_question:
+            person_name = extract_person_name(row["text"]) or extract_person_name_from_filename(row["filename"])
         if identity_question and not person_name:
             continue
         frequencies = Counter(tokens)
@@ -64,6 +67,8 @@ def retrieve(question: str, rows: list[dict], limit: int = 5) -> list[Evidence]:
         # corpus, where classic unsmoothed IDF would otherwise be zero.
         score = sum((frequencies[token] / max(1, len(tokens))) * math.log(1 + (doc_count / (document_frequency[token] + 1))) for token in query)
         if score > 0 or person_name:
+            if person_name:
+                score = max(score, 0.2)
             # Use named arguments: metadata ordering must never accidentally
             # put document text in the numeric score field.
             results.append(Evidence(
@@ -147,7 +152,7 @@ def concise_answer(question: str, evidence: list[Evidence]) -> str:
     """Safe no-LLM answer writer; facts are copied only from top evidence."""
     top = evidence[0]
     if is_identity_question(question, _tokens(question)):
-        person_name = extract_person_name(top.text)
+        person_name = extract_person_name(top.text) or extract_person_name_from_filename(top.document_name)
         if person_name:
             return f"Student name: {person_name}."
     fields = bill_fields(" ".join(top.text.split()))
@@ -192,6 +197,18 @@ def extract_person_name(text: str) -> Optional[str]:
     if not match:
         match = NAME_HEADER.search(text)
     return " ".join(match.group(1).split()) if match else None
+
+
+def extract_person_name_from_filename(filename: str) -> Optional[str]:
+    """Use a resume filename as a fallback when PDF text has no identity field."""
+    stem = re.sub(r"\.[A-Za-z0-9]+$", "", filename or "")
+    words = [word for word in re.split(r"[_\-\s]+", stem) if word]
+    name_words = [word for word in words if word.lower() not in FILENAME_NAME_WORDS]
+    if len(name_words) < 2 or len(name_words) > 4:
+        return None
+    if not all(re.fullmatch(r"[A-Za-z][A-Za-z.' ]*", word) for word in name_words):
+        return None
+    return " ".join(word.capitalize() for word in name_words)
 
 
 def is_identity_question(question: str, query_tokens: list[str]) -> bool:
