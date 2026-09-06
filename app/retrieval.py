@@ -2,6 +2,7 @@ import math
 import re
 from collections import Counter
 from difflib import get_close_matches
+from typing import Optional
 
 from .models import Evidence
 
@@ -11,6 +12,17 @@ STOPWORDS = {"the", "is", "are", "was", "were", "what", "who", "when", "where", 
 DATE_RANGE = re.compile(r"(\d{1,2}-[A-Za-z]{3}-\d{4})\s+to\s+(\d{1,2}-[A-Za-z]{3}-\d{4})", re.IGNORECASE)
 DATE_VALUE = re.compile(r"\d{1,2}[/-]\d{1,2}[/-]\d{4}")
 MONEY = re.compile(r"(?:€|₹|\$)\s?\d+(?:[.,]\d{2})|(?:Rs\.?\s*)\d+(?:[.,]\d{2})?", re.IGNORECASE)
+NAME_FIELD = re.compile(
+    r"\b(?:student\s+name|applicant\s+name|candidate\s+name|full\s+name|name)\s*[:\-]\s*"
+    r"([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,3})(?=\s*(?:\||$|,|;|\n))",
+    re.IGNORECASE,
+)
+NAME_HEADER = re.compile(
+    r"^\s*([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,3})"
+    r"(?=\s+(?:email|e-mail|phone|mobile|contact|linkedin|github)\b|\s*\|)",
+    re.IGNORECASE,
+)
+IDENTITY_TERMS = {"student", "applicant", "candidate", "name", "named"}
 
 
 def chunk_pages(document_id: str, pages, chunk_size: int = 900, overlap: int = 150) -> list[dict]:
@@ -36,16 +48,20 @@ def retrieve(question: str, rows: list[dict], limit: int = 5) -> list[Evidence]:
     query = corrected_tokens(question, rows)[0]
     if not query or not rows:
         return []
+    identity_question = bool(set(query) & IDENTITY_TERMS)
     doc_count = len(rows)
     document_frequency = Counter({token: sum(token in _tokens(row["text"]) for row in rows) for token in query})
     results: list[Evidence] = []
     for row in rows:
         tokens = _tokens(row["text"])
+        person_name = extract_person_name(row["text"]) if identity_question else None
+        if identity_question and not person_name:
+            continue
         frequencies = Counter(tokens)
         # The +1 inside log preserves useful scores for a one-document demo
         # corpus, where classic unsmoothed IDF would otherwise be zero.
         score = sum((frequencies[token] / max(1, len(tokens))) * math.log(1 + (doc_count / (document_frequency[token] + 1))) for token in query)
-        if score > 0:
+        if score > 0 or person_name:
             # Use named arguments: metadata ordering must never accidentally
             # put document text in the numeric score field.
             results.append(Evidence(
@@ -128,6 +144,10 @@ def focused_excerpt(question: str, text: str, max_length: int = 300) -> str:
 def concise_answer(question: str, evidence: list[Evidence]) -> str:
     """Safe no-LLM answer writer; facts are copied only from top evidence."""
     top = evidence[0]
+    if set(_tokens(question)) & IDENTITY_TERMS:
+        person_name = extract_person_name(top.text)
+        if person_name:
+            return f"Student name: {person_name}."
     fields = bill_fields(" ".join(top.text.split()))
     question_words = set(_tokens(question))
     if fields and question_words & {"amount", "bill", "total", "due", "invoice", "period", "payment"}:
@@ -162,6 +182,14 @@ def bill_fields(text: str) -> list[tuple[str, str]]:
 
 def format_fields(fields: list[tuple[str, str]]) -> str:
     return "\n".join(f"{label}: {value}" for label, value in fields)
+
+
+def extract_person_name(text: str) -> Optional[str]:
+    """Extract a labeled person name for resume identity questions."""
+    match = NAME_FIELD.search(text)
+    if not match:
+        match = NAME_HEADER.search(text)
+    return " ".join(match.group(1).split()) if match else None
 
 
 def _tokens(text: str) -> list[str]:

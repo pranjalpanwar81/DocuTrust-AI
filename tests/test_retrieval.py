@@ -50,3 +50,21 @@ def test_misspelled_document_keyword_is_corrected_before_retrieval():
     assert interpreted == "What is the amount payable?"
     assert corrections == [{"original": "amunt", "corrected": "amount"}]
     assert retrieve("What is the amunt payable?", rows)
+
+
+def test_identity_question_prefers_labeled_resume_name():
+    rows = [
+        {"id": "project", "document_id": "doc-1", "page_number": 1, "section": None, "text": "Projects Placency AI Powered Campus Placement Management Platform." , "filename": "resume.pdf"},
+        {"id": "identity", "document_id": "doc-1", "page_number": 1, "section": None, "text": "Applicant Name: Pranjal Panwar | Email: pranjal@example.com", "filename": "resume.pdf"},
+    ]
+
+    evidence = retrieve("What is the applicant name?", rows)
+
+    assert len(evidence) == 1
+    assert "Pranjal Panwar" in concise_answer("What is the applicant name?", evidence)
+
+
+def test_identity_question_abstains_without_name_field():
+    rows = [{"id": "project", "document_id": "doc-1", "page_number": 1, "section": None, "text": "Projects include a campus placement management platform.", "filename": "resume.pdf"}]
+
+    assert retrieve("What is the student name?", rows) == []
