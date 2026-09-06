@@ -16,7 +16,7 @@ from slowapi.errors import RateLimitExceeded
 from .config import settings
 from .database import Database
 from .extraction import ExtractionError, extract_pages, sanitize_filename
-from .retrieval import chunk_pages, concise_answer, confidence, corrected_question, focused_excerpt, retrieve
+from .retrieval import chunk_pages, concise_answer, confidence, corrected_question, focused_excerpt, is_identity_question, retrieve
 from .synthesis import SynthesisResult, synthesize
 from .auth import (
     Token, UserCreate, UserLogin, get_password_hash, verify_password,
@@ -252,7 +252,13 @@ async def ask(request: Request, query_request: QueryRequest, current_user: dict 
     evidence = retrieve(interpreted_question, rows)
     score = confidence(evidence)
     status = "grounded" if score >= settings.retrieval_threshold and evidence else "insufficient_evidence"
-    synthesis: SynthesisResult = synthesize(interpreted_question, evidence) if status == "grounded" else SynthesisResult(None, "fallback", None)
+    # Identity fields are copied deterministically from the retrieved resume;
+    # an LLM adds no value and can introduce avoidable provider failures.
+    synthesis: SynthesisResult = (
+        synthesize(interpreted_question, evidence)
+        if status == "grounded" and not is_identity_question(interpreted_question, interpreted_question.split())
+        else SynthesisResult(None, "fallback", None)
+    )
     generated = synthesis.text
     answer = generated or (concise_answer(interpreted_question, evidence) if status == "grounded" else "I do not have enough supporting evidence in the indexed documents to answer this reliably.")
     if status == "grounded":
