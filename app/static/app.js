@@ -519,9 +519,8 @@ document.querySelector('#registerForm').addEventListener('submit', async (e) => 
   const username = document.querySelector('#registerUsername').value;
   const email = document.querySelector('#registerEmail').value;
   const password = document.querySelector('#registerPassword').value;
-  const role = document.querySelector('#registerRole').value;
   
-  const result = await register(username, email, password, role);
+  const result = await register(username, email, password, 'user');
   if (result.success) {
     alert('Registration successful! Please login.');
     closeModal('registerModal');
