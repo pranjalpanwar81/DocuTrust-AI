@@ -55,11 +55,16 @@ def retrieve(question: str, rows: list[dict], limit: int = 5) -> list[Evidence]:
     doc_count = len(rows)
     document_frequency = Counter({token: sum(token in _tokens(row["text"]) for row in rows) for token in query})
     results: list[Evidence] = []
+    filename_fallback_documents: set[str] = set()
     for row in rows:
         tokens = _tokens(row["text"])
         person_name = None
         if identity_question:
-            person_name = extract_person_name(row["text"]) or extract_person_name_from_filename(row["filename"])
+            person_name = extract_person_name(row["text"])
+            if not person_name and row["document_id"] not in filename_fallback_documents:
+                person_name = extract_person_name_from_filename(row["filename"])
+                if person_name:
+                    filename_fallback_documents.add(row["document_id"])
         if identity_question and not person_name:
             continue
         frequencies = Counter(tokens)
