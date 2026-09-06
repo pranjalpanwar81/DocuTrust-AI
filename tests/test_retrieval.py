@@ -98,3 +98,12 @@ def test_bill_price_matches_total_amount_field():
 
     assert confidence(evidence) >= 0.12
     assert "Total amount: $94.50" in concise_answer("bill price", evidence)
+
+
+def test_synonym_query_returns_labeled_resume_field():
+    rows = [{"id": "resume", "document_id": "doc-1", "page_number": 1, "section": None, "text": "Technical Skills: Python, FastAPI, React | Education: B.Tech Electronics", "filename": "resume.pdf"}]
+
+    evidence = retrieve("what technologies does the applicant know", rows)
+
+    assert evidence
+    assert concise_answer("what technologies does the applicant know", evidence) == "Skills: Python, FastAPI, React."

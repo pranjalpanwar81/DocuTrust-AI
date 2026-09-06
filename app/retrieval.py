@@ -13,6 +13,29 @@ DATE_RANGE = re.compile(r"(\d{1,2}-[A-Za-z]{3}-\d{4})\s+to\s+(\d{1,2}-[A-Za-z]{3
 DATE_VALUE = re.compile(r"\d{1,2}[/-]\d{1,2}[/-]\d{4}")
 MONEY = re.compile(r"(?:€|₹|\$)\s?\d+(?:[.,]\d{2})|(?:Rs\.?\s*)\d+(?:[.,]\d{2})?", re.IGNORECASE)
 BILL_TERMS = {"amount", "bill", "total", "due", "invoice", "period", "payment", "price", "cost"}
+QUERY_ALIASES = {
+    "price": "amount",
+    "cost": "amount",
+    "student": "name",
+    "applicant": "name",
+    "candidate": "name",
+    "university": "education",
+    "college": "education",
+    "technology": "skills",
+    "technologies": "skills",
+    "technologi": "skills",
+    "tech": "skills",
+    "job": "experience",
+    "work": "experience",
+}
+LABELED_FIELDS = {
+    "email": re.compile(r"\b(?:email|e-mail)\s*[:\-]\s*([^|;\n]+)", re.IGNORECASE),
+    "phone": re.compile(r"\b(?:phone|mobile|contact)\s*[:\-]?\s*([+()\d][^|;\n]+)", re.IGNORECASE),
+    "skills": re.compile(r"\b(?:skills|technical skills|technologies)\s*[:\-]\s*([^|;\n]+)", re.IGNORECASE),
+    "education": re.compile(r"\b(?:education|qualification|degree)\s*[:\-]\s*([^|;\n]+)", re.IGNORECASE),
+    "experience": re.compile(r"\b(?:experience|work experience|employment)\s*[:\-]\s*([^|;\n]+)", re.IGNORECASE),
+    "projects": re.compile(r"\bprojects?\s*[:\-]\s*([^|;\n]+)", re.IGNORECASE),
+}
 NAME_FIELD = re.compile(
     r"\b(?:student\s+name|applicant\s+name|candidate\s+name|full\s+name|name)\s*[:\-]\s*"
     r"([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,3})"
@@ -25,7 +48,7 @@ NAME_HEADER = re.compile(
     r"\s+(?:projects|education|skills|experience|summary|objective|certifications)\b)",
     re.IGNORECASE,
 )
-IDENTITY_TERMS = {"student", "applicant", "candidate", "name", "named"}
+IDENTITY_TERMS = {"name", "named"}
 FILENAME_NAME_WORDS = {"resume", "cv", "curriculum", "vitae", "profile", "applicant", "candidate", "student", "name"}
 
 
@@ -49,7 +72,7 @@ def chunk_pages(document_id: str, pages, chunk_size: int = 900, overlap: int = 1
 
 
 def retrieve(question: str, rows: list[dict], limit: int = 5) -> list[Evidence]:
-    query = corrected_tokens(question, rows)[0]
+    query = expanded_query_tokens(question, rows)
     if not query or not rows:
         return []
     identity_question = is_identity_question(question, query)
@@ -164,6 +187,9 @@ def concise_answer(question: str, evidence: list[Evidence]) -> str:
         person_name = extract_person_name(top.text) or extract_person_name_from_filename(top.document_name)
         if person_name:
             return f"Student name: {person_name}."
+    labeled_answer = extract_labeled_answer(question, top.text)
+    if labeled_answer:
+        return labeled_answer
     fields = bill_fields(" ".join(top.text.split()))
     question_words = set(_tokens(question))
     if fields and question_words & BILL_TERMS:
@@ -220,11 +246,38 @@ def extract_person_name_from_filename(filename: str) -> Optional[str]:
     return " ".join(word.capitalize() for word in name_words)
 
 
+def expanded_query_tokens(question: str, rows: list[dict]) -> list[str]:
+    """Add document-independent synonyms while retaining document typo correction."""
+    corrected = corrected_tokens(question, rows)[0]
+    expanded = list(corrected)
+    for token in corrected:
+        alias = QUERY_ALIASES.get(token)
+        normalized_alias = _normalize(alias) if alias else None
+        if normalized_alias and normalized_alias not in expanded:
+            expanded.append(normalized_alias)
+    return expanded
+
+
+def extract_labeled_answer(question: str, text: str) -> Optional[str]:
+    """Return an exact labeled document value for common resume/document fields."""
+    question_tokens = set(_tokens(question))
+    for field, pattern in LABELED_FIELDS.items():
+        if field not in question_tokens and not any(QUERY_ALIASES.get(token) == field for token in question_tokens):
+            continue
+        match = pattern.search(text)
+        if match:
+            value = " ".join(match.group(1).split()).strip(" .,;|")
+            if value:
+                return f"{field.title()}: {value}."
+    return None
+
+
 def is_identity_question(question: str, query_tokens: list[str]) -> bool:
     """Recognize name questions even when identity words contain typos."""
-    if set(query_tokens) & IDENTITY_TERMS:
+    original_tokens = _tokens(question)
+    if set(original_tokens) & IDENTITY_TERMS:
         return True
-    for token in _tokens(question):
+    for token in original_tokens:
         if get_close_matches(token, IDENTITY_TERMS, n=1, cutoff=0.72):
             return True
     return False
