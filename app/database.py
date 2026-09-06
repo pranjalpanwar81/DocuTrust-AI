@@ -3,6 +3,16 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
+from app.config import settings
+
+# Try to import psycopg2 for PostgreSQL support
+try:
+    import psycopg2
+    from psycopg2 import sql
+    POSTGRES_AVAILABLE = True
+except ImportError:
+    POSTGRES_AVAILABLE = False
 
 
 SCHEMA = """
@@ -57,20 +67,58 @@ CREATE TABLE IF NOT EXISTS query_events (
 
 
 class Database:
-    def __init__(self, path: Path) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        self.path = path
+    def __init__(self, path: Path = None) -> None:
+        self.use_postgres = POSTGRES_AVAILABLE and settings.database_url is not None
+        
+        if self.use_postgres:
+            self.connection_params = self._parse_postgres_url(settings.database_url)
+            self._init_postgres()
+        else:
+            path = path or settings.data_dir / "docutrust.db"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            self.path = path
+            with self.connect() as connection:
+                connection.executescript(SCHEMA)
+
+    def _parse_postgres_url(self, url: str) -> dict:
+        """Parse DATABASE_URL into connection parameters."""
+        import urllib.parse
+        parsed = urllib.parse.urlparse(url)
+        return {
+            'dbname': parsed.path[1:],  # Remove leading slash
+            'user': parsed.username,
+            'password': parsed.password,
+            'host': parsed.hostname,
+            'port': parsed.port or 5432
+        }
+
+    def _init_postgres(self):
+        """Initialize PostgreSQL database with schema."""
         with self.connect() as connection:
-            connection.executescript(SCHEMA)
+            cursor = connection.cursor()
+            # Create tables one by one for PostgreSQL
+            tables = SCHEMA.split(';')
+            for table_sql in tables:
+                if table_sql.strip():
+                    # Convert SQLite syntax to PostgreSQL where needed
+                    pg_sql = table_sql.replace("INTEGER", "INTEGER")
+                    cursor.execute(pg_sql)
+            connection.commit()
 
     @contextmanager
     def connect(self):
-        connection = sqlite3.connect(self.path)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
+        if self.use_postgres:
+            connection = psycopg2.connect(**self.connection_params)
+            connection.autocommit = True
+        else:
+            connection = sqlite3.connect(self.path)
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA foreign_keys = ON")
+        
         try:
             yield connection
-            connection.commit()
+            if not self.use_postgres:
+                connection.commit()
         finally:
             connection.close()
 
