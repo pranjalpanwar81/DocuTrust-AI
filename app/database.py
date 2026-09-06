@@ -3,13 +3,17 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from app.config import settings
 
 # Try to import psycopg2 for PostgreSQL support
+psycopg2: Any = None
+DictCursor: Any = None
 try:
-    import psycopg2
-    from psycopg2.extras import DictCursor
+    import psycopg2 as psycopg2_module  # type: ignore[import-not-found]
+    from psycopg2.extras import DictCursor as dict_cursor  # type: ignore[import-not-found]
+    psycopg2 = psycopg2_module
+    DictCursor = dict_cursor
     POSTGRES_AVAILABLE = True
 except ImportError:
     POSTGRES_AVAILABLE = False
@@ -45,7 +49,7 @@ class PostgresConnection:
 
 
 INTEGRITY_ERRORS = (sqlite3.IntegrityError,)
-if POSTGRES_AVAILABLE:
+if psycopg2 is not None:
     INTEGRITY_ERRORS = (sqlite3.IntegrityError, psycopg2.IntegrityError)
 
 
@@ -101,11 +105,11 @@ CREATE TABLE IF NOT EXISTS query_events (
 
 
 class Database:
-    def __init__(self, path: Path = None) -> None:
+    def __init__(self, path: Optional[Path] = None) -> None:
         self.use_postgres = POSTGRES_AVAILABLE and bool(settings.database_url)
         
         if self.use_postgres:
-            self.connection_params = self._parse_postgres_url(settings.database_url)
+            self.connection_url = settings.database_url
             self._init_postgres()
         else:
             path = path or settings.data_dir / "docutrust.db"
@@ -113,18 +117,6 @@ class Database:
             self.path = path
             with self.connect() as connection:
                 connection.executescript(SCHEMA)
-
-    def _parse_postgres_url(self, url: str) -> dict:
-        """Parse DATABASE_URL into connection parameters."""
-        import urllib.parse
-        parsed = urllib.parse.urlparse(url)
-        return {
-            'dbname': parsed.path[1:],  # Remove leading slash
-            'user': parsed.username,
-            'password': parsed.password,
-            'host': parsed.hostname,
-            'port': parsed.port or 5432
-        }
 
     def _init_postgres(self):
         """Initialize PostgreSQL database with schema."""
@@ -134,7 +126,7 @@ class Database:
     @contextmanager
     def connect(self):
         if self.use_postgres:
-            connection = psycopg2.connect(**self.connection_params, cursor_factory=DictCursor)
+            connection = psycopg2.connect(self.connection_url, cursor_factory=DictCursor)
             connection.autocommit = True
             connection = PostgresConnection(connection)
         else:
@@ -144,7 +136,7 @@ class Database:
         
         try:
             yield connection
-            if not self.use_postgres:
+            if isinstance(connection, sqlite3.Connection):
                 connection.commit()
         finally:
             connection.close()
@@ -156,8 +148,17 @@ class Database:
                 (record["id"], record["filename"], record["media_type"], record["uploaded_at"], record["page_count"], record["extraction_method"], record["owner_username"], record["is_public"]),
             )
             connection.executemany(
-                "INSERT INTO chunks VALUES (:id, :document_id, :page_number, :section, :text)", chunks,
+                "INSERT INTO chunks VALUES (?, ?, ?, ?, ?)",
+                [(chunk["id"], chunk["document_id"], chunk["page_number"], chunk["section"], chunk["text"]) for chunk in chunks],
             )
+
+    @staticmethod
+    def _row_to_dict(row) -> dict:
+        if row is None:
+            raise ValueError("Expected a database row")
+        if hasattr(row, "keys"):
+            return {key: row[key] for key in row.keys()}
+        return dict(row)
 
     def list_documents(self) -> list[dict]:
         with self.connect() as connection:
@@ -166,14 +167,14 @@ class Database:
                 "LEFT JOIN chunks c ON c.document_id = d.id "
                 "GROUP BY d.id ORDER BY d.uploaded_at DESC"
             ).fetchall()
-        return [dict(row) for row in rows]
+        return [self._row_to_dict(row) for row in rows]
 
     def all_chunks(self) -> list[dict]:
         with self.connect() as connection:
             rows = connection.execute(
                 "SELECT c.*, d.filename FROM chunks c JOIN documents d ON c.document_id = d.id"
             ).fetchall()
-        return [dict(row) for row in rows]
+        return [self._row_to_dict(row) for row in rows]
 
     def add_query_event(self, record: dict) -> None:
         citation_ids = json.dumps(record["citation_ids"])
@@ -188,6 +189,7 @@ class Database:
         with self.connect() as connection:
             if not connection.execute("SELECT 1 FROM documents WHERE id = ?", (document_id,)).fetchone():
                 return False
+            connection.execute("DELETE FROM document_permissions WHERE document_id = ?", (document_id,))
             connection.execute("DELETE FROM chunks WHERE document_id = ?", (document_id,))
             connection.execute("DELETE FROM documents WHERE id = ?", (document_id,))
         return True
@@ -195,6 +197,7 @@ class Database:
     def delete_all_documents(self) -> int:
         with self.connect() as connection:
             count = connection.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+            connection.execute("DELETE FROM document_permissions")
             connection.execute("DELETE FROM chunks")
             connection.execute("DELETE FROM documents")
         return count
@@ -204,7 +207,7 @@ class Database:
             rows = connection.execute(
                 "SELECT * FROM query_events ORDER BY created_at DESC LIMIT ?", (limit,)
             ).fetchall()
-        events = [dict(row) for row in rows]
+        events = [self._row_to_dict(row) for row in rows]
         for event in events:
             event["citation_ids"] = json.loads(event["citation_ids"])
         return events
@@ -241,17 +244,17 @@ class Database:
         except INTEGRITY_ERRORS:
             return False
 
-    def get_user(self, username: str) -> dict:
+    def get_user(self, username: str) -> Optional[dict]:
         """Get user by username."""
         with self.connect() as connection:
             row = connection.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
-        return dict(row) if row else None
+        return self._row_to_dict(row) if row else None
 
     def get_all_users(self) -> list[dict]:
         """Get all users."""
         with self.connect() as connection:
             rows = connection.execute("SELECT username, email, role, disabled, created_at FROM users").fetchall()
-        return [dict(row) for row in rows]
+        return [self._row_to_dict(row) for row in rows]
 
     def update_user_role(self, username: str, new_role: str) -> bool:
         """Update user role."""
@@ -303,7 +306,7 @@ class Database:
                     ) GROUP BY d.id ORDER BY d.uploaded_at DESC""",
                     (username, username)
                 ).fetchall()
-        return [dict(row) for row in rows]
+        return [self._row_to_dict(row) for row in rows]
 
     def check_document_access(self, document_id: str, username: str, user_role: str) -> bool:
         """Check if a user has access to a specific document."""
