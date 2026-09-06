@@ -89,3 +89,12 @@ def test_identity_question_uses_resume_filename_when_pdf_text_has_no_name():
 
     assert len(evidence) == 1
     assert concise_answer("applicant name", evidence) == "Student name: Pranjal Panwar."
+
+
+def test_bill_price_matches_total_amount_field():
+    rows = [{"id": "bill", "document_id": "doc-1", "page_number": 1, "section": None, "text": "Invoice Number 1001 Total Amount $94.50", "filename": "utility-bill.pdf"}]
+
+    evidence = retrieve("bill price", rows)
+
+    assert confidence(evidence) >= 0.12
+    assert "Total amount: $94.50" in concise_answer("bill price", evidence)

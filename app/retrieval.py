@@ -12,6 +12,7 @@ STOPWORDS = {"the", "is", "are", "was", "were", "what", "who", "when", "where", 
 DATE_RANGE = re.compile(r"(\d{1,2}-[A-Za-z]{3}-\d{4})\s+to\s+(\d{1,2}-[A-Za-z]{3}-\d{4})", re.IGNORECASE)
 DATE_VALUE = re.compile(r"\d{1,2}[/-]\d{1,2}[/-]\d{4}")
 MONEY = re.compile(r"(?:€|₹|\$)\s?\d+(?:[.,]\d{2})|(?:Rs\.?\s*)\d+(?:[.,]\d{2})?", re.IGNORECASE)
+BILL_TERMS = {"amount", "bill", "total", "due", "invoice", "period", "payment", "price", "cost"}
 NAME_FIELD = re.compile(
     r"\b(?:student\s+name|applicant\s+name|candidate\s+name|full\s+name|name)\s*[:\-]\s*"
     r"([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,3})"
@@ -52,6 +53,7 @@ def retrieve(question: str, rows: list[dict], limit: int = 5) -> list[Evidence]:
     if not query or not rows:
         return []
     identity_question = is_identity_question(question, query)
+    bill_question = bool(set(query) & BILL_TERMS)
     doc_count = len(rows)
     document_frequency = Counter({token: sum(token in _tokens(row["text"]) for row in rows) for token in query})
     results: list[Evidence] = []
@@ -71,6 +73,8 @@ def retrieve(question: str, rows: list[dict], limit: int = 5) -> list[Evidence]:
         # The +1 inside log preserves useful scores for a one-document demo
         # corpus, where classic unsmoothed IDF would otherwise be zero.
         score = sum((frequencies[token] / max(1, len(tokens))) * math.log(1 + (doc_count / (document_frequency[token] + 1))) for token in query)
+        if bill_question and bill_fields(row["text"]):
+            score = max(score, 0.02)
         if score > 0 or person_name:
             if person_name:
                 score = max(score, 0.2)
@@ -141,7 +145,7 @@ def focused_excerpt(question: str, text: str, max_length: int = 300) -> str:
     normalized = " ".join(text.split())
     fields = bill_fields(normalized)
     query_words = set(_tokens(question))
-    if fields and query_words & {"amount", "bill", "total", "due", "invoice", "period", "payment"}:
+    if fields and query_words & BILL_TERMS:
         return format_fields(fields)
     date_match = DATE_RANGE.search(normalized)
     if date_match and any(word in _tokens(question) for word in {"date", "valid", "validity", "period", "until", "tax"}):
@@ -162,7 +166,7 @@ def concise_answer(question: str, evidence: list[Evidence]) -> str:
             return f"Student name: {person_name}."
     fields = bill_fields(" ".join(top.text.split()))
     question_words = set(_tokens(question))
-    if fields and question_words & {"amount", "bill", "total", "due", "invoice", "period", "payment"}:
+    if fields and question_words & BILL_TERMS:
         return f"Bill details\n{format_fields(fields)}"
     date_match = DATE_RANGE.search(" ".join(top.text.split()))
     if date_match and question_words & {"date", "valid", "validity", "period", "until", "tax"}:
