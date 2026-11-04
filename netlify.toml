@@ -3,7 +3,10 @@
 # so the browser sees a single origin and no CORS changes are needed.
 
 [build]
-  publish = "app/static"
+  # Build from app/static so Netlify ignores the root Python files
+  # (requirements.txt / runtime.txt are for the Render backend only).
+  base = "app/static"
+  publish = "."
   command = ""
 
 # index.html references assets as /static/..., but they live at the
