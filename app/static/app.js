@@ -149,6 +149,12 @@ async function loadDocuments() {
 document.querySelector('#fileInput').addEventListener('change', async event => {
   const file = event.target.files[0];
   if (!file) return;
+  if (!authToken) {
+    uploadStatus.textContent = 'Please log in to upload documents.';
+    event.target.value = '';
+    openModal('loginModal');
+    return;
+  }
   uploadStatus.textContent = `Uploading ${file.name}…`;
   const formData = new FormData(); formData.append('file', file);
   try {
@@ -182,6 +188,11 @@ document.querySelector('#queryForm').addEventListener('submit', async event => {
   const button = document.querySelector('#askButton');
   button.disabled = true; button.innerHTML = 'Finding evidence…';
   try {
+    if (!authToken) {
+      renderAnswer({ answer_status: 'insufficient_evidence', answer: 'Please log in to ask questions.', confidence: 0, citations: [] });
+      openModal('loginModal');
+      return;
+    }
     const selectedDocument = sourceScope.value;
     const payload = { question, ...(selectedDocument !== 'all' ? { document_ids: [selectedDocument] } : {}) };
     const response = await fetch('/api/v1/query', { 
