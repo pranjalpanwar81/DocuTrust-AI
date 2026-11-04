@@ -1,42 +1,19 @@
-# Netlify hosts the static DocuTrust AI frontend (app/static).
-# The FastAPI backend stays on Render; Netlify proxies API calls to it,
-# so the browser sees a single origin and no CORS changes are needed.
+# DocuTrust AI on Netlify.
+#  - Frontend: app/static, copied into web/public at build time.
+#  - Backend: web/netlify/functions/api.mts (TypeScript port of the FastAPI app),
+#    serving /api/* and /health.
+#  - Database: Netlify Database (Postgres); migrations in
+#    web/netlify/database/migrations are applied automatically on deploy.
+# The base directory is web/ so Netlify ignores the root Python files
+# (requirements.txt, runtime.txt), which are only for running the original
+# FastAPI backend locally.
 
 [build]
-  # Build from app/static so Netlify ignores the root Python files
-  # (requirements.txt / runtime.txt are for the Render backend only).
-  base = "app/static"
-  publish = "."
-  command = ""
+  base = "web"
+  command = "npm run build"
+  publish = "public"
 
-# index.html references assets as /static/..., but they live at the
-# publish root on Netlify.
-[[redirects]]
-  from = "/static/*"
-  to = "/:splat"
-  status = 200
-
-# Proxy the backend API to Render.
-[[redirects]]
-  from = "/api/*"
-  to = "https://docutrust-ai-r2fl.onrender.com/api/:splat"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/health"
-  to = "https://docutrust-ai-r2fl.onrender.com/health"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/docs"
-  to = "https://docutrust-ai-r2fl.onrender.com/docs"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/openapi.json"
-  to = "https://docutrust-ai-r2fl.onrender.com/openapi.json"
-  status = 200
-  force = true
+[functions]
+  # OCR runs tesseract.js in a worker thread and loads its WASM core and the
+  # bundled English model from disk, so these must ship as real node_modules.
+  external_node_modules = ["tesseract.js", "tesseract.js-core", "@tesseract.js-data/eng"]

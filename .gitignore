@@ -15,3 +15,5 @@ frontend/dist/
 frontend/.vite/
 
 .netlify
+web/node_modules/
+web/public/

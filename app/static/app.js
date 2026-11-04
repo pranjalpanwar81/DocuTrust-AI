@@ -163,8 +163,12 @@ document.querySelector('#fileInput').addEventListener('change', async event => {
       return;
     }
     
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.detail || 'Upload failed.');
+    const isJson = (response.headers.get('content-type') || '').includes('application/json');
+    const body = isJson ? await response.json() : {};
+    if (!response.ok) {
+      const tooLarge = response.status === 413 || (!isJson && response.status >= 400);
+      throw new Error(body.detail || (tooLarge ? 'File is too large. Upload files under 4 MB.' : 'Upload failed.'));
+    }
     uploadStatus.textContent = `✓ ${body.filename} indexed successfully — ${body.chunk_count} evidence chunks created.`;
     event.target.value = '';
     await loadDocuments();
